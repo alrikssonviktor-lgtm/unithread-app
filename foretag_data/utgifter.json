@@ -1,0 +1,62 @@
+{
+  "Unithread": {
+    "utgifter": [],
+    "total": 0
+  },
+  "Merchoteket": {
+    "utgifter": [
+      {
+        "datum": "2025-05-31",
+        "kategori": "Övrigt",
+        "beskrivning": "allmänna utgifter",
+        "leverantor": "allmänt",
+        "belopp": 263202.0
+      },
+      {
+        "datum": "2025-06-30",
+        "kategori": "Varuinköp",
+        "beskrivning": "allmänt",
+        "leverantor": "allmänt",
+        "belopp": 234044.0
+      },
+      {
+        "datum": "2025-07-31",
+        "kategori": "Övrigt",
+        "beskrivning": "allmänt",
+        "leverantor": "allmänt",
+        "belopp": 245222.0
+      },
+      {
+        "datum": "2025-08-31",
+        "kategori": "Övrigt",
+        "beskrivning": "allmänt",
+        "leverantor": "allmänt",
+        "belopp": 123351.0
+      },
+      {
+        "datum": "2025-09-30",
+        "kategori": "Övrigt",
+        "beskrivning": "allmänt",
+        "leverantor": "allmänt",
+        "belopp": 107846.0
+      },
+      {
+        "datum": "2025-10-31",
+        "kategori": "Övrigt",
+        "beskrivning": "allmänt",
+        "leverantor": "allmänt",
+        "belopp": 103670.0
+      },
+      {
+        "datum": "2025-11-30",
+        "kategori": "Övrigt",
+        "beskrivning": "Allmänt",
+        "leverantor": "Allmänt",
+        "belopp": 74371.0,
+        "moms_sats": 25,
+        "moms_belopp": 14874.2
+      }
+    ],
+    "total": 1151706.0
+  }
+}

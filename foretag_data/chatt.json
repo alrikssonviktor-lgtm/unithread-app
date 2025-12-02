@@ -1,0 +1,31 @@
+{
+  "groups": [
+    {
+      "id": "ad276e05-45d9-476e-b4f4-9fb655755a9c",
+      "name": "Team",
+      "created_by": "admin",
+      "created_at": "2025-12-02 00:03:51",
+      "members": [
+        "admin",
+        "Vilmer",
+        "Axel"
+      ],
+      "archived": false
+    },
+    {
+      "id": "104b0c98-d4d1-4f98-88cc-8dcd411bc905",
+      "name": "Alla",
+      "created_by": "admin",
+      "created_at": "2025-12-02 00:04:12",
+      "members": [
+        "admin",
+        "Vilmer",
+        "Axel",
+        "Douglas",
+        "Viktor"
+      ],
+      "archived": false
+    }
+  ],
+  "messages": []
+}

@@ -1,0 +1,27 @@
+{
+  "händelser": [
+    {
+      "id": "20251125_120221",
+      "titel": "Inbetalning skatt",
+      "datum": "2025-12-12",
+      "tid": "",
+      "beskrivning": "Inbetalning av prel skatt",
+      "kategori": "Skatt",
+      "prioritet": "Hög",
+      "status": "Planerad",
+      "återkommande": "Månatligen",
+      "påminnelse": 5,
+      "bild": null,
+      "filtyp": null,
+      "skapad": "2025-11-25 12:02"
+    }
+  ],
+  "kategorier": [
+    "Bokföring",
+    "Skatt",
+    "Möte",
+    "Deadline",
+    "Betalning",
+    "Övrigt"
+  ]
+}

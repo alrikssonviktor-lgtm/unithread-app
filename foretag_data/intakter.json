@@ -1,0 +1,61 @@
+{
+  "intakter": [
+    {
+      "datum": "2025-05-31",
+      "verksamhet": "Merchoteket",
+      "kategori": "Produktförsäljning",
+      "beskrivning": "försäljning i allmänhet",
+      "kund": "Shopify butiken",
+      "belopp": 349182.0
+    },
+    {
+      "datum": "2025-06-30",
+      "verksamhet": "Merchoteket",
+      "kategori": "Produktförsäljning",
+      "beskrivning": "allmänt",
+      "kund": "allmänt",
+      "belopp": 274467.0
+    },
+    {
+      "datum": "2025-07-31",
+      "verksamhet": "Merchoteket",
+      "kategori": "Produktförsäljning",
+      "beskrivning": "allmänt",
+      "kund": "allmänt",
+      "belopp": 242591.0
+    },
+    {
+      "datum": "2025-08-31",
+      "verksamhet": "Merchoteket",
+      "kategori": "Produktförsäljning",
+      "beskrivning": "allmänt",
+      "kund": "allmänt",
+      "belopp": 116345.0
+    },
+    {
+      "datum": "2025-09-30",
+      "verksamhet": "Merchoteket",
+      "kategori": "Produktförsäljning",
+      "beskrivning": "allmänt",
+      "kund": "allmänt",
+      "belopp": 116279.0
+    },
+    {
+      "datum": "2025-10-31",
+      "verksamhet": "Merchoteket",
+      "kategori": "Produktförsäljning",
+      "beskrivning": "allmänt",
+      "kund": "allmänt",
+      "belopp": 85312.0
+    },
+    {
+      "datum": "2025-11-30",
+      "verksamhet": "Merchoteket",
+      "kategori": "Produktförsäljning",
+      "beskrivning": "Allmänt",
+      "kund": "Allmänt",
+      "belopp": 78161.0
+    }
+  ],
+  "total": 1262337.0
+}

@@ -1,0 +1,300 @@
+{
+  "Unithread": {
+    "2025": {
+      "11": {
+        "status": "ej_paborjad",
+        "kategorier": {
+          "Intäkter": {
+            "Fakturaunderlag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Kontoutdrag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Betalningsbekräftelser": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          },
+          "Utgifter": {
+            "Kvitton": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Fakturor leverantörer": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Löneunderlag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Skatter & avgifter": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Övriga utgifter": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          },
+          "Avstämningar": {
+            "Bankkontoutdrag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Kreditkortsutdrag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Saldolistor": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          }
+        }
+      },
+      "06": {
+        "status": "bokford",
+        "kategorier": {
+          "Intäkter": {
+            "Fakturaunderlag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Kontoutdrag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Betalningsbekräftelser": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          },
+          "Utgifter": {
+            "Kvitton": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Fakturor leverantörer": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Löneunderlag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Skatter & avgifter": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Övriga utgifter": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          },
+          "Avstämningar": {
+            "Bankkontoutdrag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Kreditkortsutdrag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Saldolistor": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          }
+        }
+      },
+      "05": {
+        "status": "bokford",
+        "kategorier": {
+          "Intäkter": {
+            "Fakturaunderlag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Kontoutdrag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Betalningsbekräftelser": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          },
+          "Utgifter": {
+            "Kvitton": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Fakturor leverantörer": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Löneunderlag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Skatter & avgifter": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Övriga utgifter": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          },
+          "Avstämningar": {
+            "Bankkontoutdrag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Kreditkortsutdrag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Saldolistor": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          }
+        }
+      },
+      "12": {
+        "status": "ej_paborjad",
+        "kategorier": {
+          "Intäkter": {
+            "Fakturaunderlag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Kontoutdrag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Betalningsbekräftelser": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          },
+          "Utgifter": {
+            "Kvitton": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Fakturor leverantörer": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Löneunderlag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Skatter & avgifter": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Övriga utgifter": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          },
+          "Avstämningar": {
+            "Bankkontoutdrag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Kreditkortsutdrag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Saldolistor": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          },
+          "Bokslut": {
+            "Lagerinventeringar": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Pågående arbeten": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Årsredovisning": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Avstämningar": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          }
+        }
+      },
+      "07": {
+        "status": "ej_paborjad",
+        "kategorier": {
+          "Intäkter": {
+            "Fakturaunderlag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Kontoutdrag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Betalningsbekräftelser": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          },
+          "Utgifter": {
+            "Kvitton": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Fakturor leverantörer": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Löneunderlag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Skatter & avgifter": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Övriga utgifter": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          },
+          "Avstämningar": {
+            "Bankkontoutdrag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Kreditkortsutdrag": {
+              "filer": [],
+              "kommentarer": {}
+            },
+            "Saldolistor": {
+              "filer": [],
+              "kommentarer": {}
+            }
+          }
+        }
+      }
+    }
+  },
+  "Merchoteket": {}
+}

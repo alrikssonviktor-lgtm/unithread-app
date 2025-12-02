@@ -1,0 +1,63 @@
+{
+  "events": [
+    {
+      "id": 1,
+      "datum": "2025-12-12",
+      "tid": null,
+      "titel": "prel skatt inbetalning",
+      "typ": "Skatteinbetalning",
+      "verksamhet": "Alla",
+      "prioritet": "Hög",
+      "beskrivning": "",
+      "reminder": false,
+      "created": "2025-11-25 20:49:27"
+    },
+    {
+      "id": "evt_20251127_145301",
+      "title": "Inbetalning skatt",
+      "date": "2025-12-12",
+      "time": null,
+      "type": "Deadline",
+      "business": "Alla",
+      "beskrivning": "",
+      "created": "2025-11-27 14:53:01"
+    },
+    {
+      "id": "evt_20251127_150020",
+      "title": "Julkollektion klar",
+      "date": "2025-12-01",
+      "time": null,
+      "type": "Deadline",
+      "business": "Alla",
+      "beskrivning": "",
+      "created": "2025-11-27 15:00:20"
+    },
+    {
+      "id": "evt_20251201_221347",
+      "title": "Bli klar med appen",
+      "date": "2025-12-31",
+      "time": null,
+      "type": "Deadline",
+      "business": "Alla",
+      "beskrivning": "Från To-Do listan. Prioritet: Hög",
+      "created": "2025-12-01 22:13:47"
+    }
+  ],
+  "todos": [
+    {
+      "id": "todo_20251201_215913",
+      "task": "Bli klar med appen",
+      "priority": "Hög",
+      "done": true,
+      "created": "2025-12-01"
+    },
+    {
+      "id": "todo_20251201_220121",
+      "task": "Bli klar med appen",
+      "priority": "Hög",
+      "deadline": "2025-12-31",
+      "done": false,
+      "created": "2025-12-01"
+    }
+  ]
+}

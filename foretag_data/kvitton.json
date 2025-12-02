@@ -1,0 +1,44 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "Vilmer",
+      "email": "merchoteket@gmail.com",
+      "role": "Partner",
+      "business": "Merchoteket",
+      "created": "2025-11-25 14:28:17"
+    },
+    {
+      "id": 2,
+      "username": "Axel",
+      "email": "merchoteket@gmail.com",
+      "role": "Partner",
+      "business": "Merchoteket",
+      "created": "2025-11-25 14:28:26"
+    },
+    {
+      "id": 3,
+      "username": "Viktor",
+      "email": "merchoteket@gmail.com",
+      "role": "Partner",
+      "business": "Unithread",
+      "created": "2025-11-25 14:29:27"
+    }
+  ],
+  "receipts": [
+    {
+      "id": "receipt_20251125_165933_3",
+      "user_id": 3,
+      "business": "Unithread",
+      "kategori": "Övrigt",
+      "beskrivning": "Kontorsstol",
+      "leverantor": "Power",
+      "belopp": 679.0,
+      "datum": "2025-11-25",
+      "submitted": "2025-11-25 16:59:33",
+      "status": "approved",
+      "image": "receipt_20251125_165933_3.pdf",
+      "reviewed_date": "2025-11-25 16:59:58"
+    }
+  ]
+}
