@@ -2265,8 +2265,8 @@ chat_manager = st.session_state.chat_manager
 if "selected_day" in st.query_params:
     st.session_state.selected_day = st.query_params["selected_day"]
     st.session_state.main_menu_radio = "📅 Kalender"
-    # Rensa query params för att undvika loopar, men vi vill behålla state
-    # st.query_params.clear()
+    # Rensa query params för att undvika loopar
+    st.query_params.clear()
 
 # --- SIDEBAR (ENDAST EN GÅNG!) ---
 st.sidebar.title("🏢 Företagsekonomi")
@@ -3400,31 +3400,6 @@ elif main_menu == "📄 Kvittoredovisning":
                         file_id = f"{receipt_id}_{i}" if len(
                             uploaded_files) > 1 else receipt_id
                         file_link = save_receipt_image(uploaded_file, file_id)
-                        if file_link:
-                            file_links.append(file_link)
-
-                receipt = {
-                    "id": receipt_id,
-                    "user": user,
-                    "datum": datum.strftime("%Y-%m-%d"),
-                    "beskrivning": beskrivning,
-                    "belopp": belopp,
-                    "kategori": kategori,
-                    "status": "inlamnat",
-                    "files": file_links,
-                    "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                }
-
-                receipts_data["receipts"].append(receipt)
-                save_receipts(receipts_data)
-                add_activity(user, "Lade till kvitto",
-                             f"{belopp:,.0f} kr - {beskrivning}")
-                st.success(f"✅ Kvitto inlämnat! (ID: {receipt_id[:8]}...)")
-                st.rerun()
-                if uploaded_files:
-                    for uploaded_file in uploaded_files:
-                        file_link = save_receipt_image(
-                            uploaded_file, receipt_id)
                         if file_link:
                             file_links.append(file_link)
 
