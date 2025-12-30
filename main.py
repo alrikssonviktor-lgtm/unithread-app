@@ -2265,8 +2265,6 @@ chat_manager = st.session_state.chat_manager
 if "selected_day" in st.query_params:
     st.session_state.selected_day = st.query_params["selected_day"]
     st.session_state.main_menu_radio = "📅 Kalender"
-    # Rensa query params för att undvika loopar
-    st.query_params.clear()
 
 # --- SIDEBAR (ENDAST EN GÅNG!) ---
 st.sidebar.title("🏢 Företagsekonomi")
@@ -3358,69 +3356,69 @@ elif main_menu == "📄 Kvittoredovisning":
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-        with st.form("upload_receipt"):
-            col1, col2 = st.columns(2)
+            with st.form("upload_receipt"):
+                col1, col2 = st.columns(2)
 
-            with col1:
-                user = st.selectbox(
-                    "👤 Användare", receipts_data["users"], key="upload_user")
-                beskrivning = st.text_input(
-                    "📝 Beskrivning *", key="upload_desc")
-                belopp = st.number_input(
-                    "💰 Belopp (kr) *", min_value=0.0, step=0.01, key="upload_amount")
+                with col1:
+                    user = st.selectbox(
+                        "👤 Användare", receipts_data["users"], key="upload_user")
+                    beskrivning = st.text_input(
+                        "📝 Beskrivning *", key="upload_desc")
+                    belopp = st.number_input(
+                        "💰 Belopp (kr) *", min_value=0.0, step=0.01, key="upload_amount")
 
-            with col2:
-                kategori = st.selectbox(
-                    "📁 Kategori", EXPENSE_CATEGORIES, key="upload_cat")
-                datum = st.date_input(
-                    "📅 Datum", value=date.today(), key="upload_date")
+                with col2:
+                    kategori = st.selectbox(
+                        "📁 Kategori", EXPENSE_CATEGORIES, key="upload_cat")
+                    datum = st.date_input(
+                        "📅 Datum", value=date.today(), key="upload_date")
 
-            # OCR-förslag (simulerat)
-            st.info(
-                "💡 Tips: Systemet kan automatiskt läsa belopp från kvittot")
+                # OCR-förslag (simulerat)
+                st.info(
+                    "💡 Tips: Systemet kan automatiskt läsa belopp från kvittot")
 
-            uploaded_files = st.file_uploader(
-                "📎 Ladda upp kvitto/underlag",
-                type=["pdf", "jpg", "jpeg", "png"],
-                accept_multiple_files=True,
-                key="upload_receipt_files"
-            )
+                uploaded_files = st.file_uploader(
+                    "📎 Ladda upp kvitto/underlag",
+                    type=["pdf", "jpg", "jpeg", "png"],
+                    accept_multiple_files=True,
+                    key="upload_receipt_files"
+                )
 
-            submitted = st.form_submit_button(
-                "📤 Skicka in kvitto", type="primary")
+                submitted = st.form_submit_button(
+                    "📤 Skicka in kvitto", type="primary")
 
-            if submitted and user and beskrivning and belopp > 0:
-                receipt_id = str(uuid.uuid4())
+                if submitted and user and beskrivning and belopp > 0:
+                    receipt_id = str(uuid.uuid4())
 
-                # Spara filer
-                file_links = []
-                if uploaded_files:
-                    for i, uploaded_file in enumerate(uploaded_files):
-                        # Använd unikt ID för varje fil om flera laddas upp för att undvika överskrivning
-                        file_id = f"{receipt_id}_{i}" if len(
-                            uploaded_files) > 1 else receipt_id
-                        file_link = save_receipt_image(uploaded_file, file_id)
-                        if file_link:
-                            file_links.append(file_link)
+                    # Spara filer
+                    file_links = []
+                    if uploaded_files:
+                        for i, uploaded_file in enumerate(uploaded_files):
+                            # Använd unikt ID för varje fil om flera laddas upp för att undvika överskrivning
+                            file_id = f"{receipt_id}_{i}" if len(
+                                uploaded_files) > 1 else receipt_id
+                            file_link = save_receipt_image(uploaded_file, file_id)
+                            if file_link:
+                                file_links.append(file_link)
 
-                receipt = {
-                    "id": receipt_id,
-                    "user": user,
-                    "datum": datum.strftime("%Y-%m-%d"),
-                    "beskrivning": beskrivning,
-                    "belopp": belopp,
-                    "kategori": kategori,
-                    "status": "inlamnat",
-                    "files": file_links,
-                    "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                }
+                    receipt = {
+                        "id": receipt_id,
+                        "user": user,
+                        "datum": datum.strftime("%Y-%m-%d"),
+                        "beskrivning": beskrivning,
+                        "belopp": belopp,
+                        "kategori": kategori,
+                        "status": "inlamnat",
+                        "files": file_links,
+                        "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
 
-                receipts_data["receipts"].append(receipt)
-                save_receipts(receipts_data)
-                add_activity(user, "Lade till kvitto",
-                             f"{belopp:,.0f} kr - {beskrivning}")
-                st.success(f"✅ Kvitto inlämnat! (ID: {receipt_id[:8]}...)")
-                st.rerun()
+                    receipts_data["receipts"].append(receipt)
+                    save_receipts(receipts_data)
+                    add_activity(user, "Lade till kvitto",
+                                 f"{belopp:,.0f} kr - {beskrivning}")
+                    st.success(f"✅ Kvitto inlämnat! (ID: {receipt_id[:8]}...)")
+                    st.rerun()
 
 # --- KALENDER ---
 elif main_menu == "📅 Kalender":
