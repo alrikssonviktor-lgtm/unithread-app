@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
@@ -33,15 +34,28 @@ class DBHandler:
         """Autentiserar mot Google API."""
         try:
             # 1. Försök ladda från Streamlit Secrets (Molnet)
-            if "gcp_service_account" in st.secrets:
-                self.creds = Credentials.from_service_account_info(
-                    st.secrets["gcp_service_account"], scopes=SCOPES
-                )
+            # Vi använder try-except eftersom st.secrets kraschar om filen saknas lokalt
+            try:
+                if "gcp_service_account" in st.secrets:
+                    self.creds = Credentials.from_service_account_info(
+                        st.secrets["gcp_service_account"], scopes=SCOPES
+                    )
+            except Exception:
+                pass  # Inga secrets hittades, fortsätt till lokal fil
+
             # 2. Annars ladda från lokal fil (Lokal utveckling)
-            else:
-                self.creds = Credentials.from_service_account_file(
-                    SERVICE_ACCOUNT_FILE, scopes=SCOPES
-                )
+            if not self.creds:
+                if os.path.exists(SERVICE_ACCOUNT_FILE):
+                    self.creds = Credentials.from_service_account_file(
+                        SERVICE_ACCOUNT_FILE, scopes=SCOPES
+                    )
+                else:
+                    st.error(
+                        "❌ **Ingen autentisering hittad!**\n\n"
+                        "För att köra appen lokalt måste du ha filen `service_account.json` i mappen.\n"
+                        "Ladda ner den från Google Cloud Console eller kopiera den från din backup."
+                    )
+                    st.stop()
 
             self.client = gspread.authorize(self.creds)
             self.drive_service = build('drive', 'v3', credentials=self.creds)
