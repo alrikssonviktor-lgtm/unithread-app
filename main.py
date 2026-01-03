@@ -563,8 +563,6 @@ CALENDAR_FILE = DATA_DIR / "kalender.json"
 ADMIN_PASSWORD = "Admin"
 ADMIN_USERNAME = "Viktor"
 
-# --- USER MANAGEMENT CLASSES (LÄGG TILL EFTER RAD 68) ---
-
 
 class User:
     """Representerar en systemanvändare"""
@@ -3517,22 +3515,36 @@ elif main_menu == "📅 Kalender":
                         events_html += f'<div class="cal-more-events">+{len(day_events)-3} till</div>'
 
                 # Hämta nuvarande token för att behålla inloggning
-                current_token = st.query_params.get("token")
-                token_param = f"&token={current_token}" if current_token else ""
+                # current_token = st.query_params.get("token")
+                # token_param = f"&token={current_token}" if current_token else ""
 
                 # Render card with link (no indentation to avoid markdown code block issues)
-                st.markdown(f"""
-<a href="?selected_day={day_str}{token_param}" target="_self" style="text-decoration: none; color: inherit; display: block;">
-<div class="{day_classes}">
-<div class="cal-day-header">
-<span class="cal-day-num">{day}</span>
-</div>
-<div style="flex-grow: 1;">
-{events_html}
-</div>
-</div>
-</a>
-""", unsafe_allow_html=True)
+                # Vi använder en knapp istället för en länk för att undvika omladdning av sidan som rensar state
+
+                # Container för dagen för att få lite styling
+                with st.container(border=True):
+                    # Datumet som knapp
+                    if st.button(f"{day}", key=f"cal_day_{day_str}", help=f"Visa händelser för {day_str}", use_container_width=True):
+                        st.session_state.selected_day = day_str
+                        st.rerun()
+
+                    # Visa händelser under knappen
+                    if day_events:
+                        st.markdown(events_html, unsafe_allow_html=True)
+
+                # Gammal kod (HTML-länk) som orsakade problem med state
+                # st.markdown(f"""
+                # <a href="?selected_day={day_str}{token_param}" target="_self" style="text-decoration: none; color: inherit; display: block;">
+                # <div class="{day_classes}">
+                # <div class="cal-day-header">
+                # <span class="cal-day-num">{day}</span>
+                # </div>
+                # <div style="flex-grow: 1;">
+                # {events_html}
+                # </div>
+                # </div>
+                # </a>
+                # """, unsafe_allow_html=True)
 
     # Visa vald dag (om klickad)
     if 'selected_day' in st.session_state and st.session_state.selected_day:
