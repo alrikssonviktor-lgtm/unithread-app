@@ -210,13 +210,13 @@ class DBHandler:
             error_msg = str(e)
             if "Service Accounts do not have storage quota" in error_msg:
                 st.error(
-                    "⚠️ **Uppladdningsfel:** Service Accounts kan inte ladda upp filer till personliga mappar p.g.a. kvotbegränsningar.\n\n"
-                    "**Lösning:**\n"
-                    "1. Skapa en **Delad enhet (Shared Drive)** i Google Drive (kräver Workspace).\n"
-                    "2. Flytta mappen `Unithread_App_Data` dit.\n"
-                    "3. Dela den Delade enheten med service-kontot: `" +
-                    self.creds.service_account_email + "`\n\n"
-                    "Alternativt: Om du inte har Workspace, kan du inte använda filuppladdning med Service Account på detta sätt."
+                    f"⚠️ **Uppladdningsfel (Quota):**\n"
+                    f"Försökte ladda upp till mapp-ID: `{self.drive_folder_id}`\n\n"
+                    f"Detta fel uppstår om mappen ägs av Service-kontot (som har 0 lagring) eller ligger i roten.\n"
+                    f"**Åtgärd:**\n"
+                    f"1. Se till att mappen `{DRIVE_FOLDER_NAME}` ligger i en **Delad enhet (Shared Drive)** eller i din personliga Drive.\n"
+                    f"2. Se till att den är delad med: `{self.creds.service_account_email}` (Behörighet: Redigerare)\n"
+                    f"3. Om du har flera mappar med samma namn, döp om eller ta bort de felaktiga."
                 )
             else:
                 st.error(f"Kunde inte ladda upp bild: {e}")
