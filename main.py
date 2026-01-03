@@ -1044,12 +1044,41 @@ def save_receipts(data: Dict) -> None:
     """Sparar kvittodata till Google Sheets (två olika flikar)"""
     try:
         if "receipts" in data:
-            db.save_data("receipts", data["receipts"])
+            # Säkerställ att 'user' är en sträng i alla kvitton innan vi sparar
+            clean_receipts = []
+            for r in data["receipts"]:
+                r_copy = r.copy()
+                if isinstance(r_copy.get("user"), dict):
+                    # Extrahera användarnamn om det är en dict
+                    u_val = r_copy["user"]
+                    if "username" in u_val:
+                        r_copy["user"] = u_val["username"]
+                    elif u_val:
+                        r_copy["user"] = list(u_val.values())[0]
+                    else:
+                        r_copy["user"] = "Unknown"
+                clean_receipts.append(r_copy)
+
+            db.save_data("receipts", clean_receipts)
+
         if "users" in data:
             # Konvertera lista av strängar till lista av dicts för snyggare sparning
-            users_to_save = [{"username": u} for u in data["users"]] if data["users"] and isinstance(
-                data["users"][0], str) else data["users"]
+            # Men kontrollera först att det faktiskt är strängar
+            users_to_save = []
+            for u in data["users"]:
+                if isinstance(u, str):
+                    users_to_save.append({"username": u})
+                elif isinstance(u, dict) and "username" in u:
+                    users_to_save.append(u)
+                elif isinstance(u, dict):
+                    # Försök hitta ett värde
+                    val = list(u.values())[0] if u else "Unknown"
+                    users_to_save.append({"username": val})
+                else:
+                    users_to_save.append({"username": str(u)})
+
             db.save_data("users", users_to_save)
+
         load_receipts.clear()
     except Exception as e:
         st.error(f"Kunde inte spara kvittodata: {e}")

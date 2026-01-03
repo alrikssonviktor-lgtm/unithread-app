@@ -65,23 +65,32 @@ class DBHandler:
         """Hittar ID för mappen där vi sparar filer."""
         query = f"name = '{DRIVE_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
         # Lägg till supportsAllDrives=True och includeItemsFromAllDrives=True för att hitta delade mappar
-        results = self.drive_service.files().list(
-            q=query,
-            fields="files(id, name)",
-            supportsAllDrives=True,
-            includeItemsFromAllDrives=True
-        ).execute()
-        files = results.get('files', [])
+        try:
+            results = self.drive_service.files().list(
+                q=query,
+                fields="files(id, name)",
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True
+            ).execute()
+            files = results.get('files', [])
 
-        if not files:
-            # Om mappen inte hittas via API (kanske delad mapp?), sök bredare eller varna
-            # För enkelhetens skull, om vi inte hittar den, varnar vi.
-            # Man kan också hårdkoda IDt om det krånglar.
-            st.warning(
-                f"Kunde inte hitta mappen '{DRIVE_FOLDER_NAME}' via API. Filer kanske sparas i roten.")
+            if not files:
+                # Om mappen inte hittas via API (kanske delad mapp?), sök bredare eller varna
+                # För enkelhetens skull, om vi inte hittar den, varnar vi.
+                # Man kan också hårdkoda IDt om det krånglar.
+                st.warning(
+                    f"Kunde inte hitta mappen '{DRIVE_FOLDER_NAME}' via API. Filer kanske sparas i roten.")
+                self.drive_folder_id = None
+            else:
+                self.drive_folder_id = files[0]['id']
+        except Exception as e:
+            # Om vi får 403 "Service Accounts do not have storage quota", betyder det att vi försöker
+            # lista filer på "My Drive" för servicekontot som inte har utrymme.
+            # Vi måste använda en delad enhet (Shared Drive) eller en mapp som delats MED servicekontot.
+            # Om vi inte kan lista, kan vi inte hitta mappen.
+            # Vi loggar felet men låter programmet fortsätta (uppladdning kanske misslyckas senare om ID saknas)
+            st.warning(f"Kunde inte söka efter Drive-mapp: {e}")
             self.drive_folder_id = None
-        else:
-            self.drive_folder_id = files[0]['id']
 
     def _retry_api_call(self, func):
         """Kör en funktion med retry-logik för nätverksfel."""
