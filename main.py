@@ -1617,9 +1617,9 @@ st.set_page_config(page_title="Företagsekonomi AI",
                    page_icon="🏢", layout="wide")
 
 # Hantera URL-parametrar för navigering
-if "selected_day" in st.query_params:
-    st.session_state.selected_day = st.query_params["selected_day"]
-    st.session_state.main_menu_radio = "📅 Kalender"
+# if "selected_day" in st.query_params:
+#     st.session_state.selected_day = st.query_params["selected_day"]
+#     st.session_state.main_menu_radio = "📅 Kalender"
 
 # Ladda data (ENDAST EN GÅNG!)
 expenses = load_expenses()
@@ -1644,9 +1644,9 @@ access_control = st.session_state.access_control
 chat_manager = st.session_state.chat_manager
 
 # Hantera navigering via query parameters (för kalender)
-if "selected_day" in st.query_params:
-    st.session_state.selected_day = st.query_params["selected_day"]
-    st.session_state.main_menu_radio = "📅 Kalender"
+# if "selected_day" in st.query_params:
+#     st.session_state.selected_day = st.query_params["selected_day"]
+#     st.session_state.main_menu_radio = "📅 Kalender"
 
 # --- SIDEBAR (ENDAST EN GÅNG!) ---
 st.sidebar.title("🏢 Företagsekonomi")
