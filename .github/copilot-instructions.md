@@ -1,37 +1,49 @@
-# Copilot Instructions for Företagsekonomi Project
+# Copilot Instructions for Unithread App
 
 ## Project Overview
-This is a Streamlit-based financial management and receipt tracking system designed for small businesses (specifically "Unithread" and "Merchoteket"). It handles bookkeeping, receipts, budgeting, and calendar events.
+Multi-tenant Streamlit app for small business financial management, receipt tracking, budgeting, and team communication. Three entry points:
+- **`main.py`**: Primary dashboard with expenses, revenue, budgeting, chat, and calendar (modern)
+- **`kvitto_app.py`**: Receipt/expense management with image/PDF support (standalone)
+- **`foretags_ekonomi.py`**: Legacy economics view (transitioning to main.py)
 
 ## Architecture & Data Flow
-- **Framework**: Streamlit (Python).
-- **Data Persistence**: JSON-based flat files. No SQL database is used.
-  - Primary data location: `foretag_data/` directory.
-  - Key data files: `utgifter.json`, `intakter.json`, `kvitton.json`, `kalender.json`.
-- **File Storage**: 
-  - Receipts and documents are stored locally in `foretag_data/filer/` or `kvitto_bilder/`.
-  - Supports Images (PIL) and PDFs (PyMuPDF/fitz).
+**Hybrid Persistence**: JSON files locally + Google Sheets/Drive backend
+- **Local dev**: JSON files in `foretag_data/` (`utgifter.json`, `intakter.json`, `kvitton.json`, `kalender.json`, `chatt.json`)
+- **Cloud prod**: `db_handler.py` syncs to Google Sheets via `gspread` + file uploads to Google Drive
+- **Migration**: `migrate_to_cloud.py` moves JSON→Sheets with pandas-based data cleaning (handles NaN/Infinity issues)
+- **Auth**: `service_account.json` (local) or `st.secrets["gcp_service_account"]` (production)
 
-## Key Components
-- **`foretags_ekonomi.py`**: The main application entry point for business economics. Handles expenses, revenue, and budgeting.
-- **`kvitto_app.py`**: Dedicated application for receipt management and user expenses.
-- **`foretag_data/`**: Contains all persistent state (JSON) and uploaded files.
+File storage: `foretag_data/filer/` with subdirs for `kvitton/` (receipts), `bokforing/` (accounting), `kalender_filer/` (calendar).
 
-## Coding Conventions
-- **Language**: The codebase uses **Swedish** for variable names, function names, UI labels, and comments (e.g., `load_expenses`, `spara_kvitto`, `intakter`).
-- **Path Handling**: Always use `pathlib.Path` for file system operations. Avoid string manipulation for paths.
-  - Example: `DATA_DIR = Path(__file__).parent / "foretag_data"`
-- **Data Loading/Saving**: 
-  - Use dedicated `load_*` and `save_*` functions for each data type.
-  - Always specify `encoding='utf-8'` and `ensure_ascii=False` when working with JSON to support Swedish characters.
-- **Visualization**: Use **Plotly Express** (`px`) or **Plotly Graph Objects** (`go`) for charts.
-- **Authentication**: Simple session-state based admin authentication (`check_admin_password`).
+## Code Conventions
+- **Swedish-only naming**: `utgifter`, `intakter`, `ladda_`, `spara_`, all UI labels in Swedish
+- **Pathlib mandatory**: `Path(__file__).parent / "foretag_data"` - never string path concatenation
+- **JSON + UTF-8 required**: Always `encoding='utf-8', ensure_ascii=False` for å/ä/ö characters
+- **Session state for state**: `st.session_state.admin_logged_in`, `active_chat_id`, `current_user` control flow
+- **Class-based managers**: `UserManager`, `ChatManager`, `RoleControl` (main.py lines 570-730) encapsulate data operations
 
-## Critical Workflows
-- **Running the App**: 
-  - Run via Streamlit: `streamlit run foretags_ekonomi.py` or `streamlit run kvitto_app.py`.
-- **Dependency Management**: Standard Python libraries + `streamlit`, `pandas`, `plotly`, `Pillow`, `pymupdf`.
+## Multi-Tenant Pattern
+Fixed businesses: `["Unithread", "Merchoteket"]`. Data structure keys transactions by `bolag`:
+```python
+{"Unithread": {"utgifter": [...], "total": 5000}, "Merchoteket": {...}}
+```
+`UserManager.add_user()` sets role (admin/user) and permissions list per user.
 
-## Specific Patterns
-- **Session State**: Heavily relies on `st.session_state` for managing user sessions and admin login status.
-- **Error Handling**: Use `st.error()` to display user-facing errors and `st.success()` for confirmation.
+## Key Dev Workflows
+- **`streamlit run main.py`** – Primary app with chat, calendar, admin panel
+- **`streamlit run kvitto_app.py`** – Receipts-only view with image/PDF handling
+- **`python migrate_to_cloud.py`** – Migrate JSON to Google Sheets (cleans NaN/Inf with pandas)
+- **`python init_budget.py` / `migrate_budget.py`** – Separate tooling for budget fixes
+
+## Critical Patterns
+1. **Business isolation**: All load/save check `BUSINESSES` list; no shared data across orgs
+2. **Google API resilience**: `db_handler._retry_api_call()` retries 3x on network failure (500/502/503/timeout)
+3. **File uploads**: `db.upload_file()` returns webViewLink for Drive files; local fallback in dev
+4. **Visualization**: Plotly Express (`px`) + custom CSS for gradients, cards, animations
+5. **Auth layering**: `auth.check_login()` at app start; session state + role-based access control in `RoleControl`
+
+## Common Edits
+- **Add expense/revenue category**: Edit list in `main.py` line ~580 (`EXPENSE_CATEGORIES`, `REVENUE_CATEGORIES`)
+- **User management**: Use `main.py` admin panel UI or call `UserManager` methods directly
+- **Receipt upload**: `st.file_uploader()` → `save_receipt_image()` → `db.upload_file()` for cloud sync
+- **Chat**: Managed by `ChatManager` class; persisted in `chatt.json` / Google Sheets `chatt` worksheet
