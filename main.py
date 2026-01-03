@@ -1014,11 +1014,12 @@ def load_receipts() -> Dict:
                 # Försök hitta 'username' eller ta första värdet
                 if "username" in row:
                     users_list.append(row["username"])
-                elif row: # Om det finns andra nycklar (t.ex. '0' från pandas default)
+                # Om det finns andra nycklar (t.ex. '0' från pandas default)
+                elif row:
                     users_list.append(list(row.values())[0])
             elif isinstance(row, str):
                 users_list.append(row)
-        
+
         default_receipts["users"] = users_list
 
         # Städa upp kvitton om 'user' råkat bli en dict
@@ -1046,7 +1047,8 @@ def save_receipts(data: Dict) -> None:
             db.save_data("receipts", data["receipts"])
         if "users" in data:
             # Konvertera lista av strängar till lista av dicts för snyggare sparning
-            users_to_save = [{"username": u} for u in data["users"]] if data["users"] and isinstance(data["users"][0], str) else data["users"]
+            users_to_save = [{"username": u} for u in data["users"]] if data["users"] and isinstance(
+                data["users"][0], str) else data["users"]
             db.save_data("users", users_to_save)
         load_receipts.clear()
     except Exception as e:
@@ -3509,6 +3511,10 @@ elif main_menu == "📅 Kalender":
     cal = cal_module.Calendar(firstweekday=0)  # Måndag som första dag
     month_days = cal.monthdayscalendar(year, month)
 
+    # Callback för att välja dag
+    def select_day(day_str):
+        st.session_state.selected_day = day_str
+
     # Veckodagar header
     cols = st.columns(7)
     weekdays = ["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"]
@@ -3563,9 +3569,8 @@ elif main_menu == "📅 Kalender":
                 # Container för dagen för att få lite styling
                 with st.container(border=True):
                     # Datumet som knapp
-                    if st.button(f"{day}", key=f"cal_day_{day_str}", help=f"Visa händelser för {day_str}", use_container_width=True):
-                        st.session_state.selected_day = day_str
-                        st.rerun()
+                    st.button(f"{day}", key=f"cal_day_{day_str}", help=f"Visa händelser för {day_str}",
+                              use_container_width=True, on_click=select_day, args=(day_str,))
 
                     # Visa händelser under knappen
                     if day_events:
