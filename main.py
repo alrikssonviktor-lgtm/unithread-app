@@ -1748,7 +1748,7 @@ with st.sidebar:
             </div>
             <h2 style="font-size: 1.2rem; margin: 0; color: #0f172a;">Företagsekonomi</h2>
             <p style="font-size: 0.8rem; color: #64748b; margin: 0;">Allt-i-ett lösning</p>
-            <p style="font-size: 0.7rem; color: #10b981; margin-top: 5px;">✅ v1.2.1 (Fixad)</p>
+            <p style="font-size: 0.7rem; color: #10b981; margin-top: 5px;">✅ v1.2.2 (Lokal)</p>
         </div>
     """, unsafe_allow_html=True)
 
