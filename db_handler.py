@@ -207,7 +207,19 @@ class DBHandler:
             return file.get('webViewLink')  # Länk för att visa filen
 
         except Exception as e:
-            st.error(f"Kunde inte ladda upp bild: {e}")
+            error_msg = str(e)
+            if "Service Accounts do not have storage quota" in error_msg:
+                st.error(
+                    "⚠️ **Uppladdningsfel:** Service Accounts kan inte ladda upp filer till personliga mappar p.g.a. kvotbegränsningar.\n\n"
+                    "**Lösning:**\n"
+                    "1. Skapa en **Delad enhet (Shared Drive)** i Google Drive (kräver Workspace).\n"
+                    "2. Flytta mappen `Unithread_App_Data` dit.\n"
+                    "3. Dela den Delade enheten med service-kontot: `" +
+                    self.creds.service_account_email + "`\n\n"
+                    "Alternativt: Om du inte har Workspace, kan du inte använda filuppladdning med Service Account på detta sätt."
+                )
+            else:
+                st.error(f"Kunde inte ladda upp bild: {e}")
             return None
 
 
