@@ -1621,6 +1621,10 @@ st.set_page_config(page_title="Företagsekonomi AI",
 #     st.session_state.selected_day = st.query_params["selected_day"]
 #     st.session_state.main_menu_radio = "📅 Kalender"
 
+# Rensa eventuella gamla query params som kan störa
+if "selected_day" in st.query_params:
+    st.query_params.clear()
+
 # Ladda data (ENDAST EN GÅNG!)
 expenses = load_expenses()
 revenue = load_revenue()
@@ -1694,10 +1698,19 @@ if auth.has_permission("access_reports"):
 if auth.has_permission("access_settings"):
     menu_options.append("⚙️ Inställningar")
 
+
+def on_menu_change():
+    """Callback när menyn ändras"""
+    # Rensa vald dag om vi lämnar kalendern
+    if st.session_state.main_menu_radio != "📅 Kalender":
+        st.session_state.selected_day = None
+
+
 main_menu = st.sidebar.radio(
     "Huvudmeny",
     menu_options,
-    key="main_menu_radio"  # unik nyckel för att undvika ID-krockar
+    key="main_menu_radio",  # unik nyckel för att undvika ID-krockar
+    on_change=on_menu_change
 )
 
 # --- FLYTANDE CHATT (EGEN IMPLEMENTATION) ---
