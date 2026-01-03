@@ -1034,6 +1034,13 @@ def load_receipts() -> Dict:
                 else:
                     r["user"] = "Unknown"
 
+            # Parsa 'files' om det är en JSON-sträng
+            if "files" in r and isinstance(r["files"], str):
+                try:
+                    r["files"] = json.loads(r["files"])
+                except:
+                    r["files"] = []
+
         return default_receipts
     except Exception as e:
         st.error(f"Kunde inte ladda kvitton: {e}")
@@ -1048,8 +1055,9 @@ def save_receipts(data: Dict) -> None:
             clean_receipts = []
             for r in data["receipts"]:
                 r_copy = r.copy()
+
+                # Fixa user
                 if isinstance(r_copy.get("user"), dict):
-                    # Extrahera användarnamn om det är en dict
                     u_val = r_copy["user"]
                     if "username" in u_val:
                         r_copy["user"] = u_val["username"]
@@ -1057,13 +1065,16 @@ def save_receipts(data: Dict) -> None:
                         r_copy["user"] = list(u_val.values())[0]
                     else:
                         r_copy["user"] = "Unknown"
+
+                # Fixa files (serialize till JSON-sträng för Sheets)
+                if "files" in r_copy and isinstance(r_copy["files"], list):
+                    r_copy["files"] = json.dumps(r_copy["files"])
+
                 clean_receipts.append(r_copy)
 
-            db.save_data("receipts", clean_receipts)
-
-        if "users" in data:
-            # Konvertera lista av strängar till lista av dicts för snyggare sparning
-            # Men kontrollera först att det faktiskt är strängar
+            db.save_data("receipts", clean_receipts) if "users" in data:
+                # Konvertera lista av strängar till lista av dicts för snyggare sparning
+                # Men kontrollera först att det faktiskt är strängar
             users_to_save = []
             for u in data["users"]:
                 if isinstance(u, str):
