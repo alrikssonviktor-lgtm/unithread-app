@@ -185,14 +185,30 @@ class DBHandler:
 
         # Ladda upp
         # Lägg till supportsAllDrives=True för att stödja uppladdning till delade enheter
-        file = self.drive_service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id, webContentLink, webViewLink',
-            supportsAllDrives=True
-        ).execute()
+        try:
+            if not self.drive_folder_id:
+                self._find_drive_folder()
 
-        return file.get('webViewLink')  # Länk för att visa filen
+            if not self.drive_folder_id:
+                # Försök en gång till med en bredare sökning om det behövs, eller ge upp
+                raise Exception(
+                    f"Mappen '{DRIVE_FOLDER_NAME}' hittades inte. Kontrollera att den är delad med: {self.creds.service_account_email}")
+
+            # Uppdatera parents om vi hittade IDt nu
+            file_metadata['parents'] = [self.drive_folder_id]
+
+            file = self.drive_service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id, webContentLink, webViewLink',
+                supportsAllDrives=True
+            ).execute()
+
+            return file.get('webViewLink')  # Länk för att visa filen
+
+        except Exception as e:
+            st.error(f"Kunde inte ladda upp bild: {e}")
+            return None
 
 
 # Singleton-instans
