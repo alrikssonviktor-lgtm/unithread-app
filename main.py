@@ -1070,14 +1070,15 @@ def save_receipts(data: Dict) -> None:
                 if "files" in r_copy and isinstance(r_copy["files"], list):
                     r_copy["files"] = json.dumps(r_copy["files"])
 
-                    clean_receipts.append(r_copy)
+                # Append ALLTID, oavsett om files ändrades eller ej
+                clean_receipts.append(r_copy)
 
-                db.save_data("receipts", clean_receipts)
+            # Spara EFTER loopen
+            db.save_data("receipts", clean_receipts)
 
-            if "users" in data:
-                # Konvertera lista av strängar till lista av dicts för snyggare sparning
-                # Men kontrollera först att det faktiskt är strängar
-                users_to_save = []
+        if "users" in data:
+            # Konvertera lista av strängar till lista av dicts för snyggare sparning
+            users_to_save = []
             for u in data["users"]:
                 if isinstance(u, str):
                     users_to_save.append({"username": u})
@@ -1813,7 +1814,8 @@ for activity in reversed(recent_activities):
     st.sidebar.caption("v1.2.0 - Debug Mode")
     if st.sidebar.button("🚪 Logga ut", type="secondary", use_container_width=True):
         auth.logout()if not recent_activities:
-    st.sidebar.info("Ingen aktivitet än")
+    if not recent_activities:
+        st.sidebar.info("Ingen aktivitet än")
 
 # --- DASHBOARD (FÖRBÄTTRAD) ---
 if main_menu == "📊 Dashboard":
