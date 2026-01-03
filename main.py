@@ -1007,7 +1007,31 @@ def load_receipts() -> Dict:
         # Vi får slå ihop dem.
 
         users_rows = db.load_data("users")
-        default_receipts["users"] = users_rows
+        # Extrahera användarnamn från rader (om det är dicts)
+        users_list = []
+        for row in users_rows:
+            if isinstance(row, dict):
+                # Försök hitta 'username' eller ta första värdet
+                if "username" in row:
+                    users_list.append(row["username"])
+                elif row: # Om det finns andra nycklar (t.ex. '0' från pandas default)
+                    users_list.append(list(row.values())[0])
+            elif isinstance(row, str):
+                users_list.append(row)
+        
+        default_receipts["users"] = users_list
+
+        # Städa upp kvitton om 'user' råkat bli en dict
+        for r in default_receipts["receipts"]:
+            if isinstance(r.get("user"), dict):
+                # Försök rädda datat
+                u_val = r["user"]
+                if "username" in u_val:
+                    r["user"] = u_val["username"]
+                elif u_val:
+                    r["user"] = list(u_val.values())[0]
+                else:
+                    r["user"] = "Unknown"
 
         return default_receipts
     except Exception as e:
@@ -1021,7 +1045,9 @@ def save_receipts(data: Dict) -> None:
         if "receipts" in data:
             db.save_data("receipts", data["receipts"])
         if "users" in data:
-            db.save_data("users", data["users"])
+            # Konvertera lista av strängar till lista av dicts för snyggare sparning
+            users_to_save = [{"username": u} for u in data["users"]] if data["users"] and isinstance(data["users"][0], str) else data["users"]
+            db.save_data("users", users_to_save)
         load_receipts.clear()
     except Exception as e:
         st.error(f"Kunde inte spara kvittodata: {e}")
@@ -1703,7 +1729,7 @@ def on_menu_change():
     """Callback när menyn ändras"""
     # Rensa vald dag om vi lämnar kalendern
     if st.session_state.main_menu_radio != "📅 Kalender":
-        st.session_state.selected_day = None
+        st.session_state.pop("selected_day", None)
 
 
 main_menu = st.sidebar.radio(
