@@ -1812,9 +1812,10 @@ for activity in reversed(recent_activities):
     """, unsafe_allow_html=True)
 
     st.sidebar.markdown("---")
-    st.sidebar.caption("v1.2.0 - Debug Mode")
+    st.sidebar.caption("v1.2.2 - Debug Mode")
     if st.sidebar.button("🚪 Logga ut", type="secondary", use_container_width=True):
-        auth.logout()if not recent_activities:
+        auth.logout()
+
     if not recent_activities:
         st.sidebar.info("Ingen aktivitet än")
 
