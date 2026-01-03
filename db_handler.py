@@ -64,8 +64,13 @@ class DBHandler:
     def _find_drive_folder(self):
         """Hittar ID för mappen där vi sparar filer."""
         query = f"name = '{DRIVE_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+        # Lägg till supportsAllDrives=True och includeItemsFromAllDrives=True för att hitta delade mappar
         results = self.drive_service.files().list(
-            q=query, fields="files(id, name)").execute()
+            q=query,
+            fields="files(id, name)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True
+        ).execute()
         files = results.get('files', [])
 
         if not files:
@@ -170,10 +175,12 @@ class DBHandler:
             file_obj, mimetype='application/octet-stream', resumable=True)
 
         # Ladda upp
+        # Lägg till supportsAllDrives=True för att stödja uppladdning till delade enheter
         file = self.drive_service.files().create(
             body=file_metadata,
             media_body=media,
-            fields='id, webContentLink, webViewLink'
+            fields='id, webContentLink, webViewLink',
+            supportsAllDrives=True
         ).execute()
 
         return file.get('webViewLink')  # Länk för att visa filen
