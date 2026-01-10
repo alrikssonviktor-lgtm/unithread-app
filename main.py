@@ -3035,6 +3035,39 @@ elif main_menu == "📄 Kvittoredovisning":
                         else:
                             st.caption("Inga bilagor")
 
+                    # Admin-funktion för att lägga till bilaga i efterhand (Månadsrapport)
+                    with st.expander("📎 Lägg till fil (Admin)", expanded=False):
+                        if not auth.has_permission("access_settings"):
+                            st.error(
+                                "Endast admin kan ändra godkända kvitton.")
+                        else:
+                            with st.form(key=f"retro_add_file_{receipt['id']}"):
+                                st.write(
+                                    "Ladda upp fil för att komplettera detta godkända kvitto.")
+                                retro_file = st.file_uploader(
+                                    "Välj fil", key=f"retro_up_{receipt['id']}")
+                                if st.form_submit_button("💾 Spara ny bilaga"):
+                                    if retro_file:
+                                        try:
+                                            file_suffix = datetime.now().strftime("%H%M%S")
+                                            file_link = save_receipt_image(
+                                                retro_file, f"{receipt['id']}_{file_suffix}")
+
+                                            if file_link:
+                                                if "files" not in receipt or not isinstance(receipt["files"], list):
+                                                    receipt["files"] = []
+                                                receipt["files"].append(
+                                                    file_link)
+                                                save_receipts(receipts_data)
+                                                add_activity(
+                                                    ADMIN_USERNAME, "Kompletterade godkänt kvitto", receipt['id'])
+                                                st.success("✅ Fil tillagd!")
+                                                st.rerun()
+                                        except Exception as e:
+                                            st.error(f"Fel: {e}")
+                                    else:
+                                        st.warning("Ingen fil vald.")
+
     # TAB 6: STATISTIK
     with tab6:
         st.subheader("📈 Statistik & Analys")
