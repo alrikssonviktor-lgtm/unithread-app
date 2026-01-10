@@ -102,7 +102,9 @@ class DBHandler:
 
         except Exception as e:
             st.warning(f"Kunde inte söka efter Drive-mapp: {e}")
-            self.drive_folder_id = None def _retry_api_call(self, func):
+            self.drive_folder_id = None
+
+    def _retry_api_call(self, func):
         """Kör en funktion med retry-logik för nätverksfel."""
         max_retries = 3
         last_exception = None
