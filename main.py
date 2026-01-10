@@ -3011,6 +3011,30 @@ elif main_menu == "📄 Kvittoredovisning":
                     "text/csv"
                 )
 
+            # Detaljerad lista med filer
+            st.markdown("---")
+            st.markdown("### 📝 Detaljerad lista & Underlag")
+
+            for receipt in month_receipts:
+                with st.expander(f"{receipt.get('datum')} - {receipt.get('beskrivning')} ({receipt.get('belopp'):,.0f} kr)"):
+                    cols = st.columns([2, 1])
+                    with cols[0]:
+                        st.write(f"**Användare:** {receipt.get('user')}")
+                        st.write(f"**Kategori:** {receipt.get('kategori')}")
+                        st.write(f"**ID:** `{receipt.get('id')}`")
+
+                    with cols[1]:
+                        if receipt.get("files"):
+                            file_list = receipt.get("files")
+                            if isinstance(file_list, list):
+                                for i, link in enumerate(file_list):
+                                    st.markdown(
+                                        f"📄 [Öppna bilaga {i+1}]({link})")
+                            elif isinstance(file_list, str):
+                                st.markdown(f"📄 [Öppna bilaga]({file_list})")
+                        else:
+                            st.caption("Inga bilagor")
+
     # TAB 6: STATISTIK
     with tab6:
         st.subheader("📈 Statistik & Analys")
