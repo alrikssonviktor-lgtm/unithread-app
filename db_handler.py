@@ -76,28 +76,36 @@ class DBHandler:
             st.stop()
 
     def _find_drive_folder(self):
-        """Hittar ID för mappen där vi sparar filer."""
+        """Hittar ID för mappen där vi sparar filer. Prioriterar delade mappar."""
+        # Fråga specifikt efter mappar, ej raderade.
         query = f"name = '{DRIVE_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
-        # Lägg till supportsAllDrives=True och includeItemsFromAllDrives=True för att hitta delade mappar
+
         try:
+            # Försök hitta mappen. Vi sorterar på 'sharedWithMeTime desc' för att försöka prioritera delade mappar först
             results = self.drive_service.files().list(
                 q=query,
-                fields="files(id, name)",
+                fields="files(id, name, owners, shared)",
                 supportsAllDrives=True,
-                includeItemsFromAllDrives=True
+                includeItemsFromAllDrives=True,
+                orderBy="sharedWithMeTime desc"
             ).execute()
             files = results.get('files', [])
 
             if not files:
-                # Om mappen inte hittas via API (kanske delad mapp?), sök bredare eller varna
-                # För enkelhetens skull, om vi inte hittar den, varnar vi.
-                # Man kan också hårdkoda IDt om det krånglar.
                 st.warning(
-                    f"Kunde inte hitta mappen '{DRIVE_FOLDER_NAME}' via API. Filer kanske sparas i roten.")
+                    f"Kunde inte hitta mappen '{DRIVE_FOLDER_NAME}' via API. Kontrollera att den är delad med mig: {self.creds.service_account_email}")
                 self.drive_folder_id = None
             else:
-                self.drive_folder_id = files[0]['id']
+                # Om vi hittar flera, välj den första (nu sorterad på senast delad)
+                target_folder = files[0]
+                self.drive_folder_id = target_folder['id']
+
+                # Debug info (bara synlig om man vill)
+                # st.sidebar.text(f"Mapp hittad: {self.drive_folder_id}")
+
         except Exception as e:
+             st.warning(f"Kunde inte söka efter Drive-mapp: {e}")
+             self.drive_folder_id = None
             # Om vi får 403 "Service Accounts do not have storage quota", betyder det att vi försöker
             # lista filer på "My Drive" för servicekontot som inte har utrymme.
             # Vi måste använda en delad enhet (Shared Drive) eller en mapp som delats MED servicekontot.
