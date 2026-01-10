@@ -76,35 +76,12 @@ class DBHandler:
             st.stop()
 
     def _find_drive_folder(self):
-        """Hittar ID för mappen där vi sparar filer. Prioriterar delade mappar."""
-        # Fråga specifikt efter mappar, ej raderade.
-        query = f"name = '{DRIVE_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+        """Hittar ID för mappen där vi sparar filer (Hårdkodat ID för stabilitet)."""
+        # Användarens specifika mapp-ID
+        self.drive_folder_id = "1JLBR9p2NW1AuXvDZF7gbb5yP7RUVpUQV"
 
-        try:
-            # Försök hitta mappen. Vi sorterar på 'sharedWithMeTime desc' för att försöka prioritera delade mappar först
-            results = self.drive_service.files().list(
-                q=query,
-                fields="files(id, name, owners, shared)",
-                supportsAllDrives=True,
-                includeItemsFromAllDrives=True,
-                orderBy="sharedWithMeTime desc"
-            ).execute()
-            files = results.get('files', [])
-
-            if not files:
-                st.warning(
-                    f"Kunde inte hitta mappen '{DRIVE_FOLDER_NAME}' via API. Kontrollera att den är delad med mig: {self.creds.service_account_email}")
-                self.drive_folder_id = None
-            else:
-                # Om vi hittar flera, välj den första (nu sorterad på senast delad)
-                target_folder = files[0]
-                self.drive_folder_id = target_folder['id']
-
-        except Exception as e:
-            st.warning(f"Kunde inte söka efter Drive-mapp: {e}")
-            self.drive_folder_id = None
-
-    def _retry_api_call(self, func):
+        # Vi litar på att detta ID är korrekt och behöver inte söka
+        return def _retry_api_call(self, func):
         """Kör en funktion med retry-logik för nätverksfel."""
         max_retries = 3
         last_exception = None
