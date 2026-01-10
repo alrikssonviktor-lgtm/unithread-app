@@ -2937,6 +2937,36 @@ elif main_menu == "📄 Kvittoredovisning":
                                 st.warning("Avvisat!")
                                 st.rerun()
 
+                    # Retroaktiv uppladdning
+                    st.markdown("---")
+                    with st.expander("📎 Komplettera med fil"):
+                        with st.form(key=f"add_file_form_{receipt['id']}"):
+                            st.write(
+                                "Ladda upp PDF eller bild för att lägga till i detta kvitto.")
+                            new_file = st.file_uploader(
+                                "Välj fil", key=f"upload_{receipt['id']}")
+                            if st.form_submit_button("💾 Spara bilaga"):
+                                if new_file:
+                                    try:
+                                        # Skapa ett unikt ID för filen
+                                        file_suffix = datetime.now().strftime("%H%M%S")
+                                        file_link = save_receipt_image(
+                                            new_file, f"{receipt['id']}_{file_suffix}")
+
+                                        if file_link:
+                                            if "files" not in receipt or not isinstance(receipt["files"], list):
+                                                receipt["files"] = []
+                                            receipt["files"].append(file_link)
+                                            save_receipts(receipts_data)
+                                            add_activity(
+                                                ADMIN_USERNAME, "Kompletterade kvitto", receipt['id'])
+                                            st.success("✅ Fil tillagd!")
+                                            st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Fel vid uppladdning: {e}")
+                                else:
+                                    st.warning("Ingen fil vald.")
+
     # TAB 5: MÅNADSRAPPORT
     with tab5:
         st.subheader("📅 Månadsrapport")
