@@ -81,7 +81,9 @@ class DBHandler:
         self.drive_folder_id = "1JLBR9p2NW1AuXvDZF7gbb5yP7RUVpUQV"
 
         # Vi litar på att detta ID är korrekt och behöver inte söka
-        return def _retry_api_call(self, func):
+        return
+
+    def _retry_api_call(self, func):
         """Kör en funktion med retry-logik för nätverksfel."""
         max_retries = 3
         last_exception = None
