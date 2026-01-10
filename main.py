@@ -2910,7 +2910,13 @@ elif main_menu == "📄 Kvittoredovisning":
                             f"**Kategori:** {receipt.get('kategori', 'Okänd')}")
                         if receipt.get("files"):
                             st.write(f"📎 {len(receipt.get('files'))} bilagor")
-                            # Visa länkar till bilagor om möjligt (här bara text)
+                            file_list = receipt.get("files")
+                            if isinstance(file_list, list):
+                                for i, link in enumerate(file_list):
+                                    st.markdown(
+                                        f"📄 [Öppna bilaga {i+1}]({link})")
+                            elif isinstance(file_list, str):
+                                st.markdown(f"📄 [Öppna bilaga]({file_list})")
 
                     with col2:
                         c1, c2 = st.columns(2)
