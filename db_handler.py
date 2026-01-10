@@ -201,13 +201,12 @@ class DBHandler:
             error_msg = str(e)
             if "Service Accounts do not have storage quota" in error_msg:
                 st.error(
-                    f"⚠️ **Uppladdningsfel (Quota):**\n"
-                    f"Försökte ladda upp till mapp-ID: `{self.drive_folder_id}`\n\n"
-                    f"Detta fel uppstår om mappen ägs av Service-kontot (som har 0 lagring) eller ligger i roten.\n"
-                    f"**Åtgärd:**\n"
-                    f"1. Se till att mappen `{DRIVE_FOLDER_NAME}` ligger i en **Delad enhet (Shared Drive)** eller i din personliga Drive.\n"
-                    f"2. Se till att den är delad med: `{self.creds.service_account_email}` (Behörighet: Redigerare)\n"
-                    f"3. Om du har flera mappar med samma namn, döp om eller ta bort de felaktiga."
+                    f"⚠️ **Kritiskt fel (Lagringskvot):**\n"
+                    f"Google Service Accounts har 0 GB lagring som standard och kan därför **INTE** äga filer.\n"
+                    f"När du laddar upp en fil till en vanlig delad mapp ('My Drive') blir roboten ägare och uppladdningen nekas.\n\n"
+                    f"**TVÅ LÖSNINGAR:**\n"
+                    f"1. **Använd en Gemensam enhet (Shared Drive):** Flytta mappen `{DRIVE_FOLDER_NAME}` till en Shared Drive (Team Drive). Där ägs filer av organisationen, inte roboten.\n"
+                    f"2. **Aktivera Billing:** Gå till Google Cloud Console för projektet och koppla ett betalkort (Billing Account). Detta ger ofta roboten 15 GB egen lagring.\n"
                 )
             else:
                 st.error(f"Kunde inte ladda upp bild: {e}")
