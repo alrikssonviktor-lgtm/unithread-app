@@ -2641,629 +2641,6 @@ elif main_menu == "📄 Kvittoredovisning":
         </style>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📊 Dashboard",
-        "👥 Användare",
-        "📤 Ladda upp",
-        "✅ Granska",
-        "📅 Månadsrapport",
-        "📈 Statistik"
-    ])
-
-    # TAB 1: DASHBOARD
-    with tab1:
-        st.subheader("📊 Översikt Kvittoredovisning")
-
-        # Beräkna statistik
-        total_receipts = len(receipts_data["receipts"])
-        total_amount = sum(r.get("belopp", 0)
-                           for r in receipts_data["receipts"])
-
-        # Status-räkning
-        pending = len([r for r in receipts_data["receipts"]
-                       if r.get("status") == "inlamnat"])
-        approved = len([r for r in receipts_data["receipts"]
-                        if r.get("status") == "godkannt"])
-        rejected = len([r for r in receipts_data["receipts"]
-                        if r.get("status") == "avvisat"])
-
-        # Denna månad
-        current_month = date.today().strftime("%Y-%m")
-        month_receipts = [r for r in receipts_data["receipts"]
-                          if r.get("datum", "").startswith(current_month)]
-        month_amount = sum(r.get("belopp", 0) for r in month_receipts)
-
-        # KPI-kort
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("📋 Totalt kvitton", total_receipts)
-        col2.metric("💰 Totalt belopp", f"{total_amount:,.0f} kr")
-        col3.metric("⏳ Väntar granskning", pending)
-        col4.metric("📅 Denna månad", f"{month_amount:,.0f} kr")
-
-        st.markdown("---")
-
-        # Status-översikt
-        st.markdown("### 📊 Status-översikt")
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            st.markdown(f"""
-                <div class="receipt-card" style="border-left: 4px solid #f59e0b;">
-                    <h3 style="color: #f59e0b; margin: 0;">⏳ Väntar</h3>
-                    <p style="font-size: 2rem; font-weight: bold; margin: 10px 0;">{pending}</p>
-                    <p style="color: #64748b; margin: 0;">{(pending/total_receipts*100 if total_receipts > 0 else 0):.0f}% av totalt</p>
-                </div>
-            """, unsafe_allow_html=True)
-
-        with col2:
-            st.markdown(f"""
-                <div class="receipt-card" style="border-left: 4px solid #10b981;">
-                    <h3 style="color: #10b981; margin: 0;">✅ Godkända</h3>
-                    <p style="font-size: 2rem; font-weight: bold; margin: 10px 0;">{approved}</p>
-                    <p style="color: #64748b; margin: 0;">{(approved/total_receipts*100 if total_receipts > 0 else 0):.0f}% av totalt</p>
-                </div>
-            """, unsafe_allow_html=True)
-
-        with col3:
-            st.markdown(f"""
-                <div class="receipt-card" style="border-left: 4px solid #ef4444;">
-                    <h3 style="color: #ef4444; margin: 0;">❌ Avvisade</h3>
-                    <p style="font-size: 2rem; font-weight: bold; margin: 10px 0;">{rejected}</p>
-                    <p style="color: #64748b; margin: 0;">{(rejected/total_receipts*100 if total_receipts > 0 else 0):.0f}% av totalt</p>
-                </div>
-            """, unsafe_allow_html=True)
-
-        st.markdown("---")
-
-        # Per användare
-        st.markdown("### 👥 Per användare")
-
-        user_stats = {}
-        for receipt in receipts_data["receipts"]:
-            user = receipt.get("user", "Okänd")
-            if user not in user_stats:
-                user_stats[user] = {"count": 0, "amount": 0, "pending": 0}
-            user_stats[user]["count"] += 1
-            user_stats[user]["amount"] += receipt.get("belopp", 0)
-            if receipt.get("status") == "inlamnat":
-                user_stats[user]["pending"] += 1
-
-        for user, stats in user_stats.items():
-            with st.expander(f"👤 {user} - {stats['count']} kvitton ({stats['amount']:,.0f} kr)"):
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Antal", stats['count'])
-                col2.metric("Belopp", f"{stats['amount']:,.0f} kr")
-                col3.metric("Väntar", stats['pending'])
-
-        st.markdown("---")
-
-        # Senaste aktivitet
-        st.markdown("### 🕐 Senaste kvitton")
-        recent = receipts_data["receipts"][-5:]
-        for r in reversed(recent):
-            status_class = f"status-{r.get('status', 'inlamnat')}"
-            status_text = {"inlamnat": "⏳ Väntar", "godkannt": "✅ Godkänt",
-                           "avvisat": "❌ Avvisad"}.get(r.get('status'), "⏳")
-
-            st.markdown(f"""
-                <div class="receipt-card">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong>{r.get('beskrivning', 'Okänd')}</strong>
-                            <div style="color: #64748b; font-size: 0.85rem;">
-                                👤 {r.get('user', 'Okänd')} • 📅 {r.get('datum', '')} • 💰 {r.get('belopp', 0):,.0f} kr
-                            </div>
-                        </div>
-                        <span class="status-badge {status_class}">{status_text}</span>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-
-    # TAB 2: ANVÄNDARE
-    with tab2:
-        st.subheader("👥 Hantera användare")
-
-        col1, col2 = st.columns([2, 1])
-
-        with col1:
-            with st.form("add_receipt_user"):
-                new_user = st.text_input("👤 Nytt användarnamn")
-                user_email = st.text_input("📧 E-post (valfritt)")
-
-                if st.form_submit_button("➕ Lägg till användare", type="primary"):
-                    if new_user and new_user not in receipts_data["users"]:
-                        receipts_data["users"].append(new_user)
-                        save_receipts(receipts_data)
-                        add_activity(ADMIN_USERNAME,
-                                     f"Lade till kvittoanvändare", new_user)
-                        st.success(f"✅ Användare {new_user} tillagd!")
-                        st.rerun()
-                    else:
-                        st.error("❌ Användarnamn finns redan eller är tomt")
-
-        with col2:
-            st.info(f"📊 **{len(receipts_data['users'])}** aktiva användare")
-
-        if receipts_data["users"]:
-            st.markdown("---")
-            st.markdown("### 📋 Befintliga användare")
-
-            for user in receipts_data["users"]:
-                user_receipts = [
-                    r for r in receipts_data["receipts"] if r.get("user") == user]
-                user_total = sum(r.get("belopp", 0) for r in user_receipts)
-
-                col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
-
-                with col1:
-                    st.write(f"👤 **{user}**")
-                with col2:
-                    st.write(f"📋 {len(user_receipts)} kvitton")
-                with col3:
-                    st.write(f"💰 {user_total:,.0f} kr")
-                with col4:
-                    if st.button("🗑️", key=f"del_user_{user}"):
-                        receipts_data["users"].remove(user)
-                        save_receipts(receipts_data)
-                        st.success("✅ Användare borttagen!")
-                        st.rerun()
-
-    with tab3:
-        st.subheader("📤 Ladda upp kvitton")
-
-        if not receipts_data["users"]:
-            st.warning("⚠️ Lägg till användare först!")
-        else:
-            # Drag & drop zone
-            st.markdown("""
-                <div class="upload-zone">
-                    <h3>🖼️ Dra och släpp filer här</h3>
-                    <p>eller använd formuläret nedan</p>
-                </div>
-            """, unsafe_allow_html=True)
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            with st.form("upload_receipt"):
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    user = st.selectbox(
-                        "👤 Användare", receipts_data["users"], key="upload_user")
-                    beskrivning = st.text_input(
-                        "📝 Beskrivning *", key="upload_desc")
-                    belopp = st.number_input(
-                        "💰 Belopp (kr) *", min_value=0.0, step=0.01, key="upload_amount")
-
-                with col2:
-                    kategori = st.selectbox(
-                        "📁 Kategori", EXPENSE_CATEGORIES, key="upload_cat")
-                    datum = st.date_input(
-                        "📅 Datum", value=date.today(), key="upload_date")
-
-                # OCR-förslag (simulerat)
-                st.info(
-                    "💡 Tips: Systemet kan automatiskt läsa belopp från kvittot")
-
-                uploaded_files = st.file_uploader(
-                    "📎 Ladda upp kvitto/underlag",
-                    type=["pdf", "jpg", "jpeg", "png"],
-                    accept_multiple_files=True,
-                    key="upload_receipt_files"
-                )
-
-                submitted = st.form_submit_button(
-                    "📤 Skicka in kvitto", type="primary")
-
-                if submitted and user and beskrivning and belopp > 0:
-                    receipt_id = str(uuid.uuid4())
-
-                    # Spara filer
-                    file_links = []
-                    if uploaded_files:
-                        for i, uploaded_file in enumerate(uploaded_files):
-                            # Använd unikt ID för varje fil om flera laddas upp för att undvika överskrivning
-                            file_id = f"{receipt_id}_{i}" if len(
-                                uploaded_files) > 1 else receipt_id
-                            file_link = save_receipt_image(
-                                uploaded_file, file_id)
-                            if file_link:
-                                file_links.append(file_link)
-
-                    receipt = {
-                        "id": receipt_id,
-                        "user": user,
-                        "datum": datum.strftime("%Y-%m-%d"),
-                        "beskrivning": beskrivning,
-                        "belopp": belopp,
-                        "kategori": kategori,
-                        "status": "inlamnat",
-                        "files": file_links,
-                        "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-
-                    receipts_data["receipts"].append(receipt)
-                    save_receipts(receipts_data)
-
-                    # Logga aktivitet
-                    add_activity(
-                        user, f"Laddade upp kvitto: {beskrivning}", f"{belopp:,.0f} kr")
-
-                    st.success("✅ Kvitto uppladdat!")
-                    st.rerun()
-
-    with tab2:
-        st.subheader("Visa intäkter")
-
-        view_business = st.selectbox(
-            "Verksamhet", ["Alla"] + BUSINESSES, key="revenue_view")
-        filter_month = st.date_input(
-            "Månad", value=date.today(), key="revenue_month").strftime("%Y-%m")
-
-        if view_business == "Alla":
-            filtered = [i for i in revenue["intakter"]
-                        if i["datum"].startswith(filter_month)]
-        else:
-            filtered = [i for i in revenue["intakter"] if i["datum"].startswith(
-                filter_month) and i.get("verksamhet") == view_business]
-
-        if filtered:
-            total = sum(i["belopp"] for i in filtered)
-            st.metric(f"Total ({filter_month})", f"{total:,.2f} kr")
-
-            df = pd.DataFrame(filtered)
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.info("Inga intäkter för vald period")
-
-# --- BUDGET & PROGNOS ---
-elif main_menu == "📈 Budget & Prognos":
-    st.title("📈 Budget & Prognos")
-
-    tab1, tab2, tab3, tab4 = st.tabs(
-        ["💳 Sätt Budget", "🤖 AI-Prognos", "📊 Jämför", "💡 Rekommendationer"])
-
-    with tab1:
-        st.subheader("Sätt månadsbudget")
-
-        business = st.selectbox("Välj verksamhet", BUSINESSES)
-
-        st.markdown("### Total budget")
-        total_budget = st.number_input("Total månadsbudget (kr)", min_value=0.0, value=float(
-            budget[business].get("total", 0)), step=1000.0)
-        budget[business]["total"] = total_budget
-
-        st.markdown("### Budget per kategori")
-
-        if "kategorier" not in budget[business]:
-            budget[business]["kategorier"] = {}
-
-        allocated = 0
-        for kategori in EXPENSE_CATEGORIES:
-            current = budget[business]["kategorier"].get(kategori, 0)
-            new_budget = st.number_input(f"{kategori}", min_value=0.0, value=float(
-                current), step=100.0, key=f"budget_{business}_{kategori}")
-            budget[business]["kategorier"][kategori] = new_budget
-            allocated += new_budget
-
-        remaining = total_budget - allocated
-
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total budget", f"{total_budget:,.2f} kr")
-        col2.metric("Fördelat", f"{allocated:,.2f} kr")
-
-        if remaining < 0:
-            col3.metric("Överallokerat", f"{abs(remaining):,.2f} kr")
-            st.error("⚠️ Du har överallokerat budgeten!")
-        else:
-            col3.metric("Kvar", f"{remaining:,.2f} kr")
-
-        if st.button("💾 Spara budget", type="primary"):
-            save_budget(budget)
-            st.success("✅ Budget sparad!")
-            st.rerun()
-
-    with tab2:
-        st.subheader("🤖 AI-Prognos")
-
-        business = st.selectbox(
-            "Välj verksamhet", BUSINESSES, key="prognos_business")
-        months_ahead = st.slider("Prognos för antal månader framåt", 1, 12, 3)
-
-        if st.button("🔮 Generera prognos", type="primary"):
-            forecast = generate_forecast(
-                expenses, business, months_ahead=months_ahead)
-
-            st.markdown("---")
-            st.markdown(
-                f"### Prognos för {business} - {months_ahead} månad(er) framåt")
-
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Prognostiserad utgift",
-                        f"{forecast['forecast']:,.2f} kr")
-            col2.metric("Trend", f"{forecast['trend']:+.1f}% per månad")
-            col3.metric("Confidence", forecast['confidence'].upper())
-
-            st.markdown("---")
-            st.markdown("### Detaljer")
-            st.write(
-                f"**Basutgift (senaste 3 mån):** {forecast['base']:,.2f} kr")
-            st.write(f"**Säsongsfaktor:** {forecast['seasonal_factor']:.2f}x")
-            st.write(
-                f"**Datapunkter:** {forecast['data_points']} st (senaste 6 mån)")
-
-            if forecast['trend'] > 15:
-                st.error(
-                    f"⚠️ **VARNING:** Utgifterna ökar kraftigt med {forecast['trend']:.1f}% per månad!")
-            elif forecast['trend'] > 5:
-                st.warning(
-                    f"⚠️ Utgifterna ökar med {forecast['trend']:.1f}% per månad")
-            elif forecast['trend'] < -5:
-                st.success(
-                    f"✅ Utgifterna minskar med {abs(forecast['trend']):.1f}% per månad")
-
-            # Per kategori
-            st.markdown("---")
-            st.markdown("### Prognos per kategori")
-
-            for kategori in EXPENSE_CATEGORIES:
-                cat_forecast = generate_forecast(
-                    expenses, business, months_ahead=months_ahead, category=kategori)
-                if cat_forecast['forecast'] > 0:
-                    with st.expander(f"📁 {kategori} - {cat_forecast['forecast']:,.2f} kr"):
-                        st.write(
-                            f"**Prognos:** {cat_forecast['forecast']:,.2f} kr")
-                        st.write(f"**Trend:** {cat_forecast['trend']:+.1f}%")
-                        st.write(
-                            f"**Confidence:** {cat_forecast['confidence']}")
-
-    with tab3:
-        st.subheader("📊 Jämför perioder")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            period1 = st.date_input(
-                "Period 1", value=date.today() - timedelta(days=30)).strftime("%Y-%m")
-        with col2:
-            period2 = st.date_input(
-                "Period 2", value=date.today()).strftime("%Y-%m")
-
-        if st.button("📊 Jämför", type="primary"):
-            comparison_data = []
-
-            for business in BUSINESSES:
-                period1_expenses = sum(
-                    u["belopp"] for u in expenses[business]["utgifter"] if u["datum"].startswith(period1))
-                period2_expenses = sum(
-                    u["belopp"] for u in expenses[business]["utgifter"] if u["datum"].startswith(period2))
-                change = period2_expenses - period1_expenses
-                change_pct = (change / period1_expenses *
-                              100) if period1_expenses > 0 else 0
-
-                comparison_data.append({
-                    "Verksamhet": business,
-                    period1: f"{period1_expenses:,.2f} kr",
-                    period2: f"{period2_expenses:,.2f} kr",
-                    "Förändring": f"{change:+,.2f} kr ({change_pct:+.1f}%)"
-                })
-
-            df = pd.DataFrame(comparison_data)
-            st.dataframe(df, use_container_width=True)
-
-    with tab4:
-        st.subheader("💡 AI-Budget-rekommendationer")
-
-        business = st.selectbox(
-            "Välj verksamhet", BUSINESSES, key="rec_business")
-
-        if st.button("💡 Generera rekommendationer", type="primary"):
-            recommendations = generate_budget_recommendation(
-                expenses, business)
-
-            st.markdown(f"### Budgetrekommendationer för {business}")
-            st.info(
-                "Baserat på historisk data, trend och säsongsmönster + säkerhetsmarginal")
-
-            total_recommended = sum(r["rekommenderad_budget"]
-                                    for r in recommendations.values())
-            st.metric("Total rekommenderad månadsbudget",
-                      f"{total_recommended:,.2f} kr")
-
-            st.markdown("---")
-
-            for kategori, rec in recommendations.items():
-                if rec["prognos"] > 0:
-                    with st.expander(f"📁 {kategori} - Rekommenderad: {rec['rekommenderad_budget']:,.2f} kr"):
-                        col1, col2, col3 = st.columns(3)
-                        col1.metric("Prognos", f"{rec['prognos']:,.2f} kr")
-                        col2.metric("Marginal", f"{rec['marginal']:.0f}%")
-                        col3.metric("Confidence", rec['confidence'].upper())
-
-                        st.write(
-                            f"**Rekommenderad budget:** {rec['rekommenderad_budget']:,.2f} kr")
-
-# --- BOKFÖRINGSSTÖD ---
-elif main_menu == "📚 Bokföringsstöd":
-    st.title("📚 Bokföringsstöd")
-
-    months_sv = ["Januari", "Februari", "Mars", "April", "Maj", "Juni",
-                 "Juli", "Augusti", "September", "Oktober", "November", "December"]
-
-    # Välj verksamhet
-    business = st.selectbox("🏢 Verksamhet", BUSINESSES, key="bk_business")
-
-    # Välj år och månad
-    col_y, col_m = st.columns(2)
-    with col_y:
-        year = st.number_input("📆 År", min_value=2020, max_value=2035,
-                               value=date.today().year, key=f"bk_year_{business}")
-    with col_m:
-        month = st.selectbox("📅 Månad", list(range(1, 13)), index=date.today(
-        ).month-1, format_func=lambda x: months_sv[x-1], key=f"bk_month_{business}_{year}")
-
-    # Initiera datastruktur
-    year_key = str(year)
-    month_key = f"{month:02d}"
-    if business not in bokforing_data:
-        bokforing_data[business] = {}
-    if year_key not in bokforing_data[business]:
-        bokforing_data[business][year_key] = {}
-    if month_key not in bokforing_data[business][year_key]:
-        bokforing_data[business][year_key][month_key] = get_month_template(
-            month)
-        save_bokforing(bokforing_data)
-
-    month_data = bokforing_data[business][year_key][month_key]
-
-    # Status
-    status_labels = {
-        "ej_paborjad": "⭕ Ej påbörjad",
-        "paborjad": "🟡 Påbörjad",
-        "saknas_underlag": "⚠️ Saknar underlag",
-        "bokford": "✅ Bokförd",
-    }
-    current_status = month_data.get("status", "ej_paborjad")
-    new_status = st.selectbox(
-        "📊 Status",
-        list(status_labels.keys()),
-        index=list(status_labels.keys()).index(current_status),
-        format_func=lambda s: status_labels[s],
-        key=f"bk_status_{business}_{year}_{month}"
-    )
-    if new_status != current_status:
-        month_data["status"] = new_status
-        save_bokforing(bokforing_data)
-        st.success("✅ Status uppdaterad")
-
-    # Progress
-    completion = calculate_month_completion(month_data)
-    st.metric("📈 Färdigställande", f"{completion:.0f}%")
-    st.markdown("---")
-    st.subheader(f"📁 Underlag: {months_sv[month-1]} {year}")
-
-    # Kategorier och subkategorier
-    for kategori, subkategorier in month_data.get("kategorier", {}).items():
-        with st.expander(f"📂 {kategori}", expanded=True):
-            for subkategori, data in subkategorier.items():
-                st.markdown(f"**{subkategori}**")
-
-                # Uppladdning
-                files = st.file_uploader(
-                    f"Ladda upp till {subkategori}",
-                    type=["pdf", "jpg", "jpeg", "png", "xlsx", "docx"],
-                    accept_multiple_files=True,
-                    key=f"bk_upload_{business}_{year}_{month}_{kategori}_{subkategori}"
-                )
-                if files:
-                    for f in files:
-                        saved_name = save_bokforing_file(
-                            f, business, year, month, kategori, subkategori)
-                        if saved_name:
-                            data.setdefault("filer", []).append({
-                                "filename": saved_name,
-                                "original_name": f.name,
-                                "uploaded": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                                "size": f.size
-                            })
-                            save_bokforing(bokforing_data)
-                            st.success(f"✅ {len(files)} fil(er) uppladdade")
-                            st.rerun()  # FIX: Använd st.rerun() istället för st.experimental_rerun()
-
-                # Lista filer + kommentarer + ta bort
-                for idx, fil in enumerate(data.get("filer", [])):
-                    filename_or_link = fil["filename"]
-
-                    cols = st.columns([3, 2, 1])
-                    with cols[0]:
-                        st.write(f"📄 {fil['original_name']}")
-                        st.caption(
-                            f"Uppladdad: {fil['uploaded']} • {fil['size']/1024:.1f} KB")
-
-                        if filename_or_link.startswith("http"):
-                            st.link_button("📥 Öppna fil", filename_or_link)
-                        else:
-                            # Legacy local file support
-                            file_path = get_bokforing_file_path(
-                                business, year, month, filename_or_link)
-                            if file_path.exists():
-                                with open(file_path, 'rb') as f:
-                                    st.download_button(
-                                        "📥 Ladda ner",
-                                        data=f,
-                                        file_name=fil["original_name"],
-                                        key=f"bk_dl_{business}_{year}_{month}_{kategori}_{subkategori}_{idx}"
-                                    )
-
-                    with cols[1]:
-                        existing_comment = data.setdefault(
-                            "kommentarer", {}).get(fil["filename"], "")
-                        new_comment = st.text_input(
-                            "💬 Kommentar",
-                            value=existing_comment,
-                            key=f"bk_comment_{business}_{year}_{month}_{kategori}_{subkategori}_{idx}"
-                        )
-                        if new_comment != existing_comment:
-                            data["kommentarer"][fil["filename"]] = new_comment
-                            save_bokforing(bokforing_data)
-                            st.toast("Kommentar sparad", icon="💾")
-                    with cols[2]:
-                        if st.button("🗑️", key=f"bk_del_{business}_{year}_{month}_{kategori}_{subkategori}_{idx}", help="Ta bort fil"):
-                            try:
-                                if file_path.exists():
-                                    file_path.unlink()
-                            except Exception:
-                                pass
-                            data["filer"].pop(idx)
-                            data.get("kommentarer", {}).pop(
-                                fil["filename"], None)
-                            save_bokforing(bokforing_data)
-                            st.success("✅ Fil borttagen")
-                            st.rerun()  # FIX: Använd st.rerun() istället för st.experimental_rerun()
-
-# --- KVITTOREDOVISNING (KOMPLETT FÖRBÄTTRAD!) ---
-elif main_menu == "📄 Kvittoredovisning":
-    st.title("📄 Kvittoredovisning - Komplett System")
-
-    # Custom CSS för kvitton
-    st.markdown("""
-        <style>
-        .receipt-card {
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: all 0.3s ease;
-        }
-        .receipt-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-        .status-inlamnat { background: #fef3c7; color: #92400e; }
-        .status-godkannt { background: #d1fae5; color: #065f46; }
-        .status-avvisat { background: #fee2e2; color: #991b1b; }
-        .upload-zone {
-            border: 2px dashed #cbd5e1;
-            border-radius: 10px;
-            padding: 30px;
-            text-align: center;
-            background: #f8fafc;
-            transition: all 0.3s ease;
-        }
-        .upload-zone:hover {
-            border-color: #667eea;
-            background: #eef2ff;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📊 Dashboard",
         "👥 Användare",
@@ -3511,6 +2888,130 @@ elif main_menu == "📄 Kvittoredovisning":
                                  f"{belopp:,.0f} kr - {beskrivning}")
                     st.success(f"✅ Kvitto inlämnat! (ID: {receipt_id[:8]}...)")
                     st.rerun()
+
+    # TAB 4: GRANSKA (Admin)
+    with tab4:
+        st.subheader("✅ Granska kvitton")
+
+        # Filtrera kvitton som inte är granskade
+        pending_receipts = [r for r in receipts_data["receipts"]
+                            if r.get("status") == "inlamnat"]
+
+        if not pending_receipts:
+            st.info("🎉 Inga kvitton väntar på granskning!")
+        else:
+            for receipt in pending_receipts:
+                with st.expander(f"{receipt.get('datum')} - {receipt.get('user')} - {receipt.get('belopp'):,.0f} kr"):
+                    col1, col2 = st.columns([2, 1])
+                    with col1:
+                        st.write(
+                            f"**Beskrivning:** {receipt.get('beskrivning')}")
+                        st.write(
+                            f"**Kategori:** {receipt.get('kategori', 'Okänd')}")
+                        if receipt.get("files"):
+                            st.write(f"📎 {len(receipt.get('files'))} bilagor")
+                            # Visa länkar till bilagor om möjligt (här bara text)
+
+                    with col2:
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            if st.button("✅ Godkänn", key=f"approve_{receipt['id']}"):
+                                receipt["status"] = "godkannt"
+                                save_receipts(receipts_data)
+                                add_activity(
+                                    ADMIN_USERNAME, "Godkände kvitto", f"{receipt.get('user')} - {receipt.get('belopp')} kr")
+                                st.success("Godkänt!")
+                                st.rerun()
+                        with c2:
+                            if st.button("❌ Avvisa", key=f"reject_{receipt['id']}"):
+                                receipt["status"] = "avvisat"
+                                save_receipts(receipts_data)
+                                add_activity(
+                                    ADMIN_USERNAME, "Avvisade kvitto", f"{receipt.get('user')} - {receipt.get('belopp')} kr")
+                                st.warning("Avvisat!")
+                                st.rerun()
+
+    # TAB 5: MÅNADSRAPPORT
+    with tab5:
+        st.subheader("📅 Månadsrapport")
+
+        col1, col2 = st.columns(2)
+        curr_year = datetime.now().year
+        curr_month = datetime.now().month
+
+        with col1:
+            sel_year = st.number_input(
+                "År", value=curr_year, min_value=2023, max_value=2030, key="rep_y")
+        with col2:
+            sel_month = st.selectbox("Månad", range(
+                1, 13), index=curr_month-1, key="rep_m")
+
+        month_str = f"{sel_year}-{sel_month:02d}"
+
+        # Filtrera kvitton
+        month_receipts = [r for r in receipts_data["receipts"]
+                          if r.get("datum", "").startswith(month_str) and r.get("status") == "godkannt"]
+
+        if not month_receipts:
+            st.info(f"Inga godkända kvitton för {month_str}")
+        else:
+            # Stats for month
+            total_month = sum(r.get("belopp", 0) for r in month_receipts)
+            st.metric(f"Total utlägg {month_str}", f"{total_month:,.0f} kr")
+
+            # DataFrame
+            df = pd.DataFrame(month_receipts)
+            if not df.empty:
+                display_df = df[["datum", "user",
+                                 "beskrivning", "belopp", "kategori"]].copy()
+                st.dataframe(display_df, use_container_width=True)
+
+                # CSV Export
+                csv = display_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    "📥 Ladda ner rapport (CSV)",
+                    csv,
+                    f"rapport_{month_str}.csv",
+                    "text/csv"
+                )
+
+    # TAB 6: STATISTIK
+    with tab6:
+        st.subheader("📈 Statistik & Analys")
+
+        approved_receipts = [
+            r for r in receipts_data["receipts"] if r.get("status") == "godkannt"]
+
+        if not approved_receipts:
+            st.info("Ingen data att analysera än.")
+        else:
+            df_stats = pd.DataFrame(approved_receipts)
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("#### Per Kategori")
+                if not df_stats.empty:
+                    cat_fig = px.pie(
+                        df_stats, values='belopp', names='kategori', title='Kostnader per kategori')
+                    st.plotly_chart(cat_fig, use_container_width=True)
+
+            with col2:
+                st.markdown("#### Per Användare")
+                if not df_stats.empty:
+                    user_fig = px.bar(df_stats, x='user', y='belopp',
+                                      color='kategori', title='Kostnader per användare')
+                    st.plotly_chart(user_fig, use_container_width=True)
+
+            st.markdown("#### Tidsutveckling")
+            try:
+                df_stats["datum"] = pd.to_datetime(df_stats["datum"])
+                df_stats = df_stats.sort_values("datum")
+                line_fig = px.line(df_stats, x="datum", y="belopp",
+                                   color="kategori", title="Utlägg över tid")
+                st.plotly_chart(line_fig, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Kunde inte skapa tidslinje: {e}")
 
 # --- KALENDER ---
 elif main_menu == "📅 Kalender":
