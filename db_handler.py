@@ -100,21 +100,9 @@ class DBHandler:
                 target_folder = files[0]
                 self.drive_folder_id = target_folder['id']
 
-                # Debug info (bara synlig om man vill)
-                # st.sidebar.text(f"Mapp hittad: {self.drive_folder_id}")
-
         except Exception as e:
-             st.warning(f"Kunde inte söka efter Drive-mapp: {e}")
-             self.drive_folder_id = None
-            # Om vi får 403 "Service Accounts do not have storage quota", betyder det att vi försöker
-            # lista filer på "My Drive" för servicekontot som inte har utrymme.
-            # Vi måste använda en delad enhet (Shared Drive) eller en mapp som delats MED servicekontot.
-            # Om vi inte kan lista, kan vi inte hitta mappen.
-            # Vi loggar felet men låter programmet fortsätta (uppladdning kanske misslyckas senare om ID saknas)
             st.warning(f"Kunde inte söka efter Drive-mapp: {e}")
-            self.drive_folder_id = None
-
-    def _retry_api_call(self, func):
+            self.drive_folder_id = None def _retry_api_call(self, func):
         """Kör en funktion med retry-logik för nätverksfel."""
         max_retries = 3
         last_exception = None
