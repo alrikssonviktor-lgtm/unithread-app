@@ -3,6 +3,13 @@ __pycache__/
 .DS_Store
 .env
 venv/
+.venv/
 .vscode/
+.idea/
 service_account.json
+client_secret.json
+*.json.bak
 foretag_data/
+kvitto_bilder/
+uploads/
+Thumbs.db
