@@ -15,16 +15,25 @@ const state = {
     chatPollTimer: null,
     calYear: new Date().getFullYear(),
     calMonth: new Date().getMonth() + 1,
+    selectedProjectId: null,
 };
 
 // ---------------------------------------------------------------------------
 // API helper
 // ---------------------------------------------------------------------------
+
+/** Read CSRF token from cookie */
+function getCsrfToken() {
+    const match = document.cookie.match(/csrf_token=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+}
+
 async function api(url, opts = {}) {
-    const res = await fetch(url, {
-        headers: { 'Content-Type': 'application/json', ...opts.headers },
-        ...opts,
-    });
+    const headers = { 'Content-Type': 'application/json', ...opts.headers };
+    if (opts.method && opts.method !== 'GET') {
+        headers['X-CSRFToken'] = getCsrfToken();
+    }
+    const res = await fetch(url, { headers, ...opts });
     if (res.status === 401) { window.location.href = '/'; return null; }
     return res.json();
 }
@@ -38,6 +47,15 @@ async function apiForm(url, formData) {
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
+
+/** Escape HTML to prevent XSS */
+function escHtml(str) {
+    if (str === null || str === undefined) return '';
+    const div = document.createElement('div');
+    div.textContent = String(str);
+    return div.innerHTML;
+}
+
 function fmt(n) {
     return Number(n || 0).toLocaleString('sv-SE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
@@ -67,7 +85,7 @@ function priorityTag(p) {
 }
 
 function calEventClass(type) {
-    const map = { 'Möte': 'mote', 'Deadline': 'deadline', 'Påminnelse': 'paminnelse', 'Betalning': 'betalning' };
+    const map = { 'Möte': 'mote', 'Deadline': 'deadline', 'Påminnelse': 'paminnelse', 'Betalning': 'betalning', 'Projektdeadline': 'projektdeadline' };
     return map[type] || 'ovrigt';
 }
 
@@ -130,8 +148,11 @@ function renderPage() {
         customers: renderCustomers,
         pipeline: renderPipeline,
         quotes: renderQuotes,
+        invoices: renderInvoices,
+        integrations: renderIntegrations,
         calendar: renderCalendar,
         chat: renderChat,
+        projects: renderProjects,
         settings: renderSettings,
     };
     (renderers[state.page] || renderDashboard)();
@@ -179,6 +200,24 @@ async function renderDashboard() {
         </div>`
     ).join('') || '<div class="text-muted text-sm">Ingen aktivitet ännu</div>';
 
+    // Build budget vs actual chart sections
+    const bva = data.budget_vs_actual || {};
+    let budgetChartHtml = '';
+    const budgetChartIds = [];
+    for (const biz of c.businesses) {
+        const bizBva = bva[biz] || {};
+        const cats = Object.keys(bizBva);
+        if (cats.length) {
+            const chartId = `budgetChart_${biz.replace(/[^a-zA-Z]/g,'')}`;
+            budgetChartIds.push({ id: chartId, biz, data: bizBva });
+            budgetChartHtml += `
+            <div class="card mt-4">
+                <div class="card-header"><h3>Budget vs Faktiskt — ${biz}</h3></div>
+                <div class="card-body"><div class="chart-container" style="height:280px"><canvas id="${chartId}"></canvas></div></div>
+            </div>`;
+        }
+    }
+
     el('pageContent').innerHTML = `
         <div class="page-header">
             <h1>Dashboard</h1>
@@ -191,16 +230,28 @@ async function renderDashboard() {
                 <div class="card-body"><div class="chart-container"><canvas id="trendChart"></canvas></div></div>
             </div>
             <div class="card">
+                <div class="card-header"><h3>Månatlig vinst</h3></div>
+                <div class="card-body"><div class="chart-container"><canvas id="profitChart"></canvas></div></div>
+            </div>
+        </div>
+        <div class="grid-2 mt-4">
+            <div class="card">
                 <div class="card-header"><h3>Utgifter per kategori</h3></div>
                 <div class="card-body"><div class="chart-container"><canvas id="catChart"></canvas></div></div>
             </div>
+            <div class="card">
+                <div class="card-header"><h3>Intäkter per kategori</h3></div>
+                <div class="card-body"><div class="chart-container"><canvas id="revCatChart"></canvas></div></div>
+            </div>
         </div>
+        ${budgetChartHtml}
+        <div id="integrationsSummaryDash"></div>
         <div class="card mt-4">
             <div class="card-header"><h3>Senaste aktivitet</h3></div>
             <div class="card-body">${activityHtml}</div>
         </div>`;
 
-    // Trend chart
+    // Trend chart (bar — revenue vs expenses)
     const labels = data.monthly_trend.map(m => m.month);
     new Chart(el('trendChart'), {
         type: 'bar',
@@ -214,19 +265,134 @@ async function renderDashboard() {
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } },
     });
 
-    // Category chart
+    // Profit line chart
+    const profitData = data.monthly_trend.map(m => m.revenue - m.expenses);
+    new Chart(el('profitChart'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Vinst/Förlust',
+                data: profitData,
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99,102,241,0.1)',
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: profitData.map(v => v >= 0 ? '#10b981' : '#ef4444'),
+                pointRadius: 5,
+                pointHoverRadius: 7,
+            }],
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } },
+            scales: { y: { beginAtZero: false } },
+        },
+    });
+
+    // Category doughnut (expenses)
     const catLabels = Object.keys(data.category_breakdown || {});
     const catValues = Object.values(data.category_breakdown || {});
+    const chartColors = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#64748b'];
     if (catLabels.length) {
         new Chart(el('catChart'), {
             type: 'doughnut',
             data: {
                 labels: catLabels,
-                datasets: [{ data: catValues, backgroundColor: ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#64748b'] }],
+                datasets: [{ data: catValues, backgroundColor: chartColors }],
             },
             options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } },
         });
     }
+
+    // Revenue category doughnut
+    const revCatLabels = Object.keys(data.revenue_breakdown || {});
+    const revCatValues = Object.values(data.revenue_breakdown || {});
+    if (revCatLabels.length) {
+        new Chart(el('revCatChart'), {
+            type: 'doughnut',
+            data: {
+                labels: revCatLabels,
+                datasets: [{ data: revCatValues, backgroundColor: ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#06b6d4', '#67e8f9'] }],
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } },
+        });
+    } else {
+        el('revCatChart')?.parentElement?.closest('.card')?.insertAdjacentHTML('beforeend',
+            '<div class="empty-state" style="padding:20px"><p class="text-muted text-sm">Inga intäkter registrerade i år</p></div>');
+    }
+
+    // Budget vs Actual bar charts per business
+    for (const bc of budgetChartIds) {
+        const cats = Object.keys(bc.data);
+        new Chart(el(bc.id), {
+            type: 'bar',
+            data: {
+                labels: cats,
+                datasets: [
+                    { label: 'Budget', data: cats.map(c => bc.data[c].budget), backgroundColor: 'rgba(99,102,241,0.5)', borderRadius: 4 },
+                    { label: 'Förbrukat', data: cats.map(c => bc.data[c].spent), backgroundColor: cats.map(c => bc.data[c].spent > bc.data[c].budget && bc.data[c].budget > 0 ? 'rgba(239,68,68,0.7)' : 'rgba(16,185,129,0.7)'), borderRadius: 4 },
+                ],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                plugins: { legend: { position: 'bottom' } },
+                scales: { x: { beginAtZero: true } },
+            },
+        });
+    }
+
+    // Budget warnings — show toasts for overspending
+    checkBudgetWarnings();
+
+    // Integration summary on dashboard
+    loadDashboardIntegrations();
+}
+
+async function loadDashboardIntegrations() {
+    const summary = await api('/api/integrations/summary');
+    if (!summary || !summary.length) return;
+    const cards = summary.map(p => {
+        const statusDot = p.last_sync_status === 'success' ? '🟢'
+            : p.last_sync_status === 'error' ? '🔴' : '🟡';
+        return `
+        <div class="integration-dash-card">
+            <div class="integration-dash-icon">${p.icon}</div>
+            <div class="integration-dash-info">
+                <div class="integration-dash-name">${escHtml(p.display_name)} ${statusDot}</div>
+                <div class="integration-dash-metrics">
+                    ${p.month_expenses > 0 ? `<span class="text-danger">−${fmt(p.month_expenses)} kr</span>` : ''}
+                    ${p.month_revenue > 0 ? `<span class="text-success">+${fmt(p.month_revenue)} kr</span>` : ''}
+                    ${p.month_expenses === 0 && p.month_revenue === 0 ? '<span class="text-muted">Ingen data denna månad</span>' : ''}
+                </div>
+                ${p.last_sync ? `<div class="text-muted text-xs">Senast: ${p.last_sync}</div>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+
+    el('integrationsSummaryDash').innerHTML = `
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3>🔗 Integrationer</h3>
+                <button class="btn btn-ghost btn-sm" onclick="navigate('integrations')">Hantera →</button>
+            </div>
+            <div class="card-body">
+                <div class="integration-dash-grid">${cards}</div>
+            </div>
+        </div>`;
+}
+
+async function checkBudgetWarnings() {
+    const warnings = await api('/api/budget/warnings');
+    if (!warnings || !warnings.length) return;
+    // Show up to 3 most critical warnings as toasts
+    warnings.slice(0, 3).forEach(w => {
+        const icon = w.level === 'danger' ? '🚨' : '⚠️';
+        const msg = w.kategori === 'Total'
+            ? `${icon} ${w.bolag}: Total budget ${Math.round(w.pct)}% förbrukad!`
+            : `${icon} ${w.bolag} — ${w.kategori}: ${Math.round(w.pct)}% av budget`;
+        toast(msg, w.level === 'danger' ? 'error' : 'warning');
+    });
 }
 
 // ===== EXPENSES ===========================================================
@@ -273,13 +439,13 @@ async function loadExpenses() {
             <tbody>${data.map(e => `
                 <tr>
                     <td>${fmtDate(e.datum)}</td>
-                    <td><span class="tag tag-primary">${e.bolag}</span></td>
-                    <td>${e.kategori}</td>
-                    <td>${e.beskrivning || '—'}</td>
-                    <td>${e.leverantor || '—'}</td>
+                    <td><span class="tag tag-primary">${escHtml(e.bolag)}</span></td>
+                    <td>${escHtml(e.kategori)}</td>
+                    <td>${escHtml(e.beskrivning) || '—'}</td>
+                    <td>${escHtml(e.leverantor) || '—'}</td>
                     <td class="text-right font-mono">${fmt(e.belopp)} kr</td>
                     <td class="text-right font-mono text-muted">${fmt(e.moms_belopp)} kr</td>
-                    <td><button class="btn btn-ghost btn-xs" onclick="deleteExpense('${e.id}')">✕</button></td>
+                    <td><button class="btn btn-ghost btn-xs" onclick="deleteExpense('${escHtml(e.id)}')">✕</button></td>
                 </tr>`).join('')}
             </tbody>
             <tfoot><tr><td colspan="5" class="text-right" style="font-weight:700;padding:14px 16px">Totalt</td><td class="text-right font-mono" style="font-weight:700;padding:14px 16px">${fmt(total)} kr</td><td></td><td></td></tr></tfoot>
@@ -378,12 +544,12 @@ async function loadRevenue() {
             <tbody>${data.map(r => `
                 <tr>
                     <td>${fmtDate(r.datum)}</td>
-                    <td><span class="tag tag-primary">${r.bolag}</span></td>
-                    <td>${r.kategori}</td>
-                    <td>${r.beskrivning || '—'}</td>
-                    <td>${r.kund || '—'}</td>
+                    <td><span class="tag tag-primary">${escHtml(r.bolag)}</span></td>
+                    <td>${escHtml(r.kategori)}</td>
+                    <td>${escHtml(r.beskrivning) || '—'}</td>
+                    <td>${escHtml(r.kund) || '—'}</td>
                     <td class="text-right font-mono">${fmt(r.belopp)} kr</td>
-                    <td><button class="btn btn-ghost btn-xs" onclick="deleteRevenue('${r.id}')">✕</button></td>
+                    <td><button class="btn btn-ghost btn-xs" onclick="deleteRevenue('${escHtml(r.id)}')">✕</button></td>
                 </tr>`).join('')}
             </tbody>
             <tfoot><tr><td colspan="5" class="text-right" style="font-weight:700;padding:14px 16px">Totalt</td><td class="text-right font-mono" style="font-weight:700;padding:14px 16px">${fmt(total)} kr</td><td></td></tr></tfoot>
@@ -437,13 +603,28 @@ async function deleteRevenue(id) {
 // ===== BUDGET =============================================================
 async function renderBudget() {
     const c = state.constants;
-    const [budgetData, expenses] = await Promise.all([
+    const [budgetData, expenses, warnings] = await Promise.all([
         api('/api/budget'),
         api('/api/expenses'),
+        api('/api/budget/warnings'),
     ]);
 
     const year = new Date().getFullYear().toString();
     let html = `<div class="page-header"><h1>Budget & Ekonomi</h1><p>Sätt och följ upp budgetar per verksamhet</p></div>`;
+
+    // Warning banner
+    if (warnings && warnings.length) {
+        html += `<div class="budget-warnings mb-4">`;
+        for (const w of warnings) {
+            const icon = w.level === 'danger' ? '🚨' : '⚠️';
+            const cls = w.level === 'danger' ? 'alert-danger' : 'alert-warning';
+            const label = w.kategori === 'Total'
+                ? `${w.bolag}: Total budget <strong>${Math.round(w.pct)}%</strong> förbrukad (${fmt(w.spent)} / ${fmt(w.budget)} kr)`
+                : `${w.bolag} — ${w.kategori}: <strong>${Math.round(w.pct)}%</strong> av budget (${fmt(w.spent)} / ${fmt(w.budget)} kr)`;
+            html += `<div class="alert ${cls}">${icon} ${label}</div>`;
+        }
+        html += `</div>`;
+    }
 
     for (const biz of c.businesses) {
         const b = budgetData[biz] || { total: 0, kategorier: {} };
@@ -588,10 +769,10 @@ async function loadReceipts() {
                     : '';
                 return `<tr class="receipt-row" onclick="openReceiptDetail(${JSON.stringify(r).replace(/"/g, '&quot;')})">
                     <td>${fmtDate(r.datum)}</td>
-                    <td><span class="tag tag-primary">${r.bolag || '—'}</span></td>
-                    <td>${r.user}</td>
-                    <td>${r.beskrivning || '—'}</td>
-                    <td>${r.kategori || '—'}</td>
+                    <td><span class="tag tag-primary">${escHtml(r.bolag) || '—'}</span></td>
+                    <td>${escHtml(r.user)}</td>
+                    <td>${escHtml(r.beskrivning) || '—'}</td>
+                    <td>${escHtml(r.kategori) || '—'}</td>
                     <td class="text-right font-mono">${fmt(r.belopp)} kr</td>
                     <td>${statusTag(r.status)}</td>
                     <td><div class="receipt-thumbs">${receiptThumbnails(files)}</div></td>
@@ -914,12 +1095,44 @@ async function deleteTodo(id) {
     loadTodos();
 }
 
-// ===== CHAT ===============================================================
+// ===== CHAT (WebSocket real-time) =========================================
+let socket = null;
+let _typingTimeout = null;
+
+function initSocket() {
+    if (socket) return;
+    socket = io({ transports: ['websocket', 'polling'] });
+    socket.on('new_message', (msg) => {
+        if (msg.group_id === state.chatGroupId) {
+            appendChatMessage(msg);
+        } else {
+            // Show badge for other groups
+            const badge = el('chatBadge');
+            if (badge) { badge.style.display = 'inline'; badge.textContent = '!'; }
+        }
+    });
+    socket.on('user_typing', (data) => {
+        if (data.group_id === state.chatGroupId) {
+            showTypingIndicator(data.user);
+        }
+    });
+}
+
+function showTypingIndicator(user) {
+    let ti = el('typingIndicator');
+    if (!ti) return;
+    ti.textContent = `${user} skriver...`;
+    ti.style.display = 'block';
+    clearTimeout(_typingTimeout);
+    _typingTimeout = setTimeout(() => { ti.style.display = 'none'; }, 2000);
+}
+
 async function renderChat() {
+    initSocket();
     el('pageContent').innerHTML = `
         <div class="page-header">
             <div class="page-header-row">
-                <div><h1>Chatt</h1><p>Kommunicera med ditt team</p></div>
+                <div><h1>Chatt</h1><p>Kommunicera med ditt team i realtid</p></div>
                 <button class="btn btn-primary" onclick="openCreateGroupModal()">+ Ny grupp</button>
             </div>
         </div>
@@ -941,30 +1154,57 @@ async function loadChatGroups() {
         el('chatGroupList').innerHTML = '<div class="card-body text-muted text-sm">Inga grupper ännu</div>';
         return;
     }
-    el('chatGroupList').innerHTML = groups.map(g => `
-        <div class="chat-group-item${state.chatGroupId === g.id ? ' active' : ''}" onclick="selectChatGroup('${g.id}', '${g.name.replace(/'/g, "\\'")}')">
-            <div class="group-name">${g.name}</div>
+    el('chatGroupList').innerHTML = groups.map(g => {
+        const canDelete = state.role === 'admin' || g.created_by === state.user;
+        return `
+        <div class="chat-group-item${state.chatGroupId === g.id ? ' active' : ''}" onclick="selectChatGroup('${escHtml(g.id)}', '${escHtml(g.name).replace(/'/g, "\\'")}')">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <div class="group-name">${escHtml(g.name)}</div>
+                ${canDelete ? `<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();deleteChatGroup('${escHtml(g.id)}','${escHtml(g.name).replace(/'/g, "\\'")}')" title="Ta bort grupp">✕</button>` : ''}
+            </div>
             <div class="group-preview">${Array.isArray(g.members) ? g.members.length + ' medlemmar' : ''}</div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 async function selectChatGroup(gid, name) {
+    // Leave previous room
+    if (state.chatGroupId && socket) {
+        socket.emit('leave_chat', { group_id: state.chatGroupId });
+    }
+    // Stop old polling if still active
+    if (state.chatPollTimer) { clearInterval(state.chatPollTimer); state.chatPollTimer = null; }
+
     state.chatGroupId = gid;
     loadChatGroups(); // Refresh active state
+
     el('chatMain').innerHTML = `
         <div style="padding:16px;border-bottom:1px solid var(--border);font-weight:700">${name}</div>
         <div class="chat-messages" id="chatMessages"><div class="spinner"></div></div>
+        <div id="typingIndicator" class="typing-indicator" style="display:none"></div>
         <div class="chat-input-bar">
-            <input type="text" id="chatInput" placeholder="Skriv ett meddelande..." onkeydown="if(event.key==='Enter')sendChatMessage()">
+            <input type="text" id="chatInput" placeholder="Skriv ett meddelande..."
+                onkeydown="if(event.key==='Enter')sendChatMessage()"
+                oninput="emitTyping()">
             <button onclick="sendChatMessage()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
         </div>`;
+
+    // Join WebSocket room
+    if (socket) socket.emit('join_chat', { group_id: gid });
+
+    // Load existing messages
     loadChatMessages();
-    // Poll for new messages
-    if (state.chatPollTimer) clearInterval(state.chatPollTimer);
-    state.chatPollTimer = setInterval(loadChatMessages, 5000);
+
+    // Fallback poll every 30s (in case socket disconnects)
+    state.chatPollTimer = setInterval(loadChatMessages, 30000);
+}
+
+function emitTyping() {
+    if (socket && state.chatGroupId) {
+        socket.emit('typing', { group_id: state.chatGroupId });
+    }
 }
 
 async function loadChatMessages() {
@@ -979,12 +1219,33 @@ async function loadChatMessages() {
     const wasAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 50;
     container.innerHTML = msgs.map(m => `
         <div class="chat-msg ${m.sender === state.user ? 'own' : 'other'}">
-            ${m.sender !== state.user ? `<div class="msg-sender">${m.sender}</div>` : ''}
-            <div>${m.content}</div>
-            <div class="msg-time">${m.timestamp ? m.timestamp.slice(11, 16) : ''}</div>
+            ${m.sender !== state.user ? `<div class="msg-sender">${escHtml(m.sender)}</div>` : ''}
+            <div>${escHtml(m.content)}</div>
+            <div class="msg-time">${m.timestamp ? escHtml(m.timestamp.slice(11, 16)) : ''}</div>
         </div>
     `).join('');
     if (wasAtBottom) container.scrollTop = container.scrollHeight;
+}
+
+function appendChatMessage(msg) {
+    const container = el('chatMessages');
+    if (!container) return;
+    // Remove empty state if present
+    const emptyEl = container.querySelector('.chat-empty');
+    if (emptyEl) emptyEl.remove();
+    const wasAtBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 50;
+    const div = document.createElement('div');
+    div.className = `chat-msg ${msg.sender === state.user ? 'own' : 'other'}`;
+    div.innerHTML = `
+        ${msg.sender !== state.user ? `<div class="msg-sender">${escHtml(msg.sender)}</div>` : ''}
+        <div>${escHtml(msg.content)}</div>
+        <div class="msg-time">${msg.timestamp ? escHtml(msg.timestamp.slice(11, 16)) : ''}</div>
+    `;
+    container.appendChild(div);
+    if (wasAtBottom) container.scrollTop = container.scrollHeight;
+    // Hide typing indicator
+    const ti = el('typingIndicator');
+    if (ti) ti.style.display = 'none';
 }
 
 async function sendChatMessage() {
@@ -996,7 +1257,7 @@ async function sendChatMessage() {
         method: 'POST',
         body: JSON.stringify({ content }),
     });
-    loadChatMessages();
+    // Message will arrive via socket — no need to reload
 }
 
 async function openCreateGroupModal() {
@@ -1029,6 +1290,17 @@ async function submitChatGroup(e) {
     });
     closeModal();
     toast('Grupp skapad', 'success');
+    loadChatGroups();
+}
+
+async function deleteChatGroup(gid, name) {
+    if (!confirm(`Ta bort gruppen "${name}" och alla meddelanden?`)) return;
+    await api(`/api/chat/groups/${gid}`, { method: 'DELETE' });
+    if (state.chatGroupId === gid) {
+        state.chatGroupId = null;
+        el('chatMain').innerHTML = '<div class="chat-empty">Välj en grupp för att börja chatta</div>';
+    }
+    toast('Grupp borttagen', 'success');
     loadChatGroups();
 }
 
@@ -1513,6 +1785,8 @@ async function openQuoteDetail(qid) {
             <div class="flex gap-2 flex-wrap">${statusButtons}</div>
             <div class="flex gap-2 mt-4">
                 <a href="/api/quotes/${q.id}/pdf" target="_blank" class="btn btn-secondary flex-1">📄 Ladda ner PDF</a>
+                ${q.status === 'Accepterad' ? `<button class="btn btn-primary flex-1" onclick="convertQuoteToInvoice('${q.id}')">🧾 Skapa faktura</button>` : ''}
+                ${q.status === 'Fakturerad' ? `<span class="tag tag-primary" style="align-self:center;padding:8px 16px">✓ Fakturerad</span>` : ''}
             </div>
         </div>
     `, q.customer_name || '');
@@ -1534,6 +1808,501 @@ async function deleteQuote(id) {
     await api(`/api/quotes/${id}`, { method: 'DELETE' });
     toast('Offert borttagen', 'success');
     loadQuotes();
+}
+
+async function convertQuoteToInvoice(qid) {
+    if (!confirm('Konvertera denna offert till en faktura?')) return;
+    const res = await api(`/api/quotes/${qid}/convert-to-invoice`, { method: 'POST' });
+    if (res && res.ok) {
+        toast(`Faktura ${res.invoice.id} skapad!`, 'success');
+        closeModal();
+        navigate('invoices');
+    } else {
+        toast(res?.error || 'Kunde inte skapa faktura', 'error');
+    }
+}
+
+// ===== INVOICES / FAKTUROR ================================================
+async function renderInvoices() {
+    const c = state.constants;
+    el('pageContent').innerHTML = `
+        <div class="page-header">
+            <div class="page-header-row">
+                <div><h1>Fakturor</h1><p>Hantera fakturor och betalningsstatus</p></div>
+                <button class="btn btn-primary" onclick="openInvoiceModal()">+ Ny faktura</button>
+            </div>
+        </div>
+        <div class="filter-bar">
+            <select id="invStatus" onchange="loadInvoices()">
+                <option value="Alla">Alla statusar</option>
+                ${c.invoice_statuses.map(s => `<option>${s}</option>`).join('')}
+            </select>
+            <select id="invBolag" onchange="loadInvoices()">
+                <option value="Alla">Alla bolag</option>
+                ${c.businesses.map(b => `<option>${b}</option>`).join('')}
+            </select>
+        </div>
+        <div class="card"><div class="table-wrapper" id="invTable"><div class="spinner"></div></div></div>`;
+    loadInvoices();
+}
+
+async function loadInvoices() {
+    const params = new URLSearchParams();
+    const status = el('invStatus')?.value;
+    const bolag = el('invBolag')?.value;
+    if (status && status !== 'Alla') params.set('status', status);
+    if (bolag && bolag !== 'Alla') params.set('bolag', bolag);
+    const data = await api(`/api/invoices?${params}`);
+    if (!data || !data.length) {
+        el('invTable').innerHTML = '<div class="empty-state"><h3>Inga fakturor</h3><p>Skapa din första faktura eller konvertera en offert.</p></div>';
+        return;
+    }
+    const totalSum = data.reduce((s, inv) => s + Number(inv.total || 0), 0);
+    const unpaid = data.filter(inv => inv.status === 'Obetald').reduce((s, inv) => s + Number(inv.total || 0), 0);
+    el('invTable').innerHTML = `
+        <div class="flex gap-4 mb-4" style="padding:0 4px">
+            <div class="text-sm"><span class="text-muted">Totalt fakturerat:</span> <strong class="font-mono">${fmt(totalSum)} kr</strong></div>
+            <div class="text-sm"><span class="text-muted">Obetalt:</span> <strong class="font-mono" style="color:var(--danger)">${fmt(unpaid)} kr</strong></div>
+        </div>
+        <table>
+            <thead><tr><th>Faktura-ID</th><th>Kund</th><th>Titel</th><th>Bolag</th><th class="text-right">Summa</th><th>Förfallodatum</th><th>Status</th><th></th></tr></thead>
+            <tbody>${data.map(inv => `
+                <tr class="receipt-row" onclick="openInvoiceDetail('${inv.id}')">
+                    <td class="font-mono text-sm" style="font-weight:600">${inv.id}</td>
+                    <td>${inv.customer_name || '—'}</td>
+                    <td>${inv.title || '—'}</td>
+                    <td><span class="tag tag-primary">${inv.bolag}</span></td>
+                    <td class="text-right font-mono">${fmt(inv.total)} kr</td>
+                    <td class="${isOverdue(inv) ? 'text-danger' : ''}">${inv.due_date || '—'}</td>
+                    <td>${invoiceStatusTag(inv.status)}</td>
+                    <td class="flex gap-1">
+                        <a href="/api/invoices/${inv.id}/pdf" target="_blank" class="btn btn-ghost btn-xs" onclick="event.stopPropagation()" title="Ladda ner PDF">📄</a>
+                        <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();deleteInvoice('${inv.id}')">✕</button>
+                    </td>
+                </tr>`).join('')}
+            </tbody>
+        </table>`;
+}
+
+function isOverdue(inv) {
+    return inv.status === 'Obetald' && inv.due_date && inv.due_date < new Date().toISOString().slice(0, 10);
+}
+
+function invoiceStatusTag(s) {
+    const map = { 'Obetald': 'warning', 'Betald': 'success', 'Förfallen': 'danger', 'Krediterad': 'neutral' };
+    return `<span class="tag tag-${map[s] || 'neutral'}">${s || '—'}</span>`;
+}
+
+function openInvoiceModal() {
+    const c = state.constants;
+    openModal('Ny faktura', `
+        <form onsubmit="return submitInvoice(event)">
+            <div class="form-row">
+                <div class="form-group"><label>Titel</label><input class="form-control" id="invTitle" required placeholder="Fakturans titel"></div>
+                <div class="form-group"><label>Bolag</label><select class="form-control" id="invBolagF">${c.businesses.map(b => `<option>${b}</option>`).join('')}</select></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>Kund-namn</label><input class="form-control" id="invCustName" placeholder="Kundnamn" list="invCustomerList"></div>
+                <div class="form-group"><label>Förfallodatum</label><input type="date" class="form-control" id="invDueDate" value="${new Date(Date.now() + 30*86400000).toISOString().slice(0,10)}"></div>
+            </div>
+            <datalist id="invCustomerList"></datalist>
+            <div class="form-group"><label>Beskrivning</label><textarea class="form-control" id="invDesc" rows="2" placeholder="Kort beskrivning"></textarea></div>
+            <h3 style="margin:16px 0 8px;font-size:0.9rem;font-weight:700">Rader</h3>
+            <div id="invoiceItems">
+                <div class="quote-item-row">
+                    <input class="form-control" placeholder="Beskrivning" data-field="description" style="flex:3">
+                    <input type="number" class="form-control" placeholder="Antal" value="1" data-field="quantity" style="flex:0.7">
+                    <input type="number" class="form-control" placeholder="À-pris" data-field="unit_price" style="flex:1">
+                    <select class="form-control" data-field="moms" style="flex:0.7">
+                        ${c.vat_rates.map(v => `<option ${v===25?'selected':''}>${v}</option>`).join('')}
+                    </select>
+                    <button type="button" class="btn btn-ghost btn-xs" onclick="this.closest('.quote-item-row').remove()">✕</button>
+                </div>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="addInvoiceItemRow()">+ Lägg till rad</button>
+            <button type="submit" class="btn btn-primary mt-4" style="width:100%">Skapa faktura</button>
+        </form>
+    `);
+    loadInvoiceCustomerDatalist();
+}
+
+async function loadInvoiceCustomerDatalist() {
+    const customers = await api('/api/customers');
+    const dl = document.getElementById('invCustomerList');
+    if (dl && customers) {
+        dl.innerHTML = customers.map(c => `<option value="${c.name}">`).join('');
+    }
+}
+
+function addInvoiceItemRow() {
+    const c = state.constants;
+    const row = document.createElement('div');
+    row.className = 'quote-item-row';
+    row.innerHTML = `
+        <input class="form-control" placeholder="Beskrivning" data-field="description" style="flex:3">
+        <input type="number" class="form-control" placeholder="Antal" value="1" data-field="quantity" style="flex:0.7">
+        <input type="number" class="form-control" placeholder="À-pris" data-field="unit_price" style="flex:1">
+        <select class="form-control" data-field="moms" style="flex:0.7">
+            ${c.vat_rates.map(v => `<option ${v===25?'selected':''}>${v}</option>`).join('')}
+        </select>
+        <button type="button" class="btn btn-ghost btn-xs" onclick="this.closest('.quote-item-row').remove()">✕</button>
+    `;
+    document.getElementById('invoiceItems').appendChild(row);
+}
+
+async function submitInvoice(ev) {
+    ev.preventDefault();
+    const items = [];
+    document.querySelectorAll('#invoiceItems .quote-item-row').forEach(row => {
+        const desc = row.querySelector('[data-field="description"]').value;
+        const qty = Number(row.querySelector('[data-field="quantity"]').value) || 1;
+        const price = Number(row.querySelector('[data-field="unit_price"]').value) || 0;
+        const moms = Number(row.querySelector('[data-field="moms"]').value) || 25;
+        if (desc || price) {
+            items.push({ description: desc, quantity: qty, unit_price: price, moms, total: qty * price });
+        }
+    });
+    const customers = await api('/api/customers');
+    const custName = el('invCustName').value;
+    const custMatch = (customers || []).find(c => c.name === custName);
+    await api('/api/invoices', {
+        method: 'POST',
+        body: JSON.stringify({
+            title: el('invTitle').value,
+            bolag: el('invBolagF').value,
+            customer_name: custName,
+            customer_id: custMatch?.id || '',
+            due_date: el('invDueDate').value,
+            description: el('invDesc').value,
+            items,
+        }),
+    });
+    closeModal();
+    toast('Faktura skapad', 'success');
+    loadInvoices();
+}
+
+async function openInvoiceDetail(iid) {
+    const invoices = await api('/api/invoices');
+    const inv = (invoices || []).find(x => x.id === iid);
+    if (!inv) return;
+
+    let items = inv.items || '[]';
+    if (typeof items === 'string') { try { items = JSON.parse(items); } catch { items = []; } }
+
+    const c = state.constants;
+    const statusButtons = c.invoice_statuses.map(s =>
+        `<button class="btn ${s === inv.status ? 'btn-primary' : 'btn-secondary'} btn-sm" onclick="changeInvoiceStatus('${inv.id}','${s}')">${s}</button>`
+    ).join(' ');
+
+    const itemsHtml = items.length ? `
+        <table style="margin:12px 0">
+            <thead><tr><th>Beskrivning</th><th class="text-right">Antal</th><th class="text-right">À-pris</th><th class="text-right">Moms</th><th class="text-right">Summa</th></tr></thead>
+            <tbody>${items.map(it => `
+                <tr>
+                    <td>${it.description || '—'}</td>
+                    <td class="text-right">${it.quantity}</td>
+                    <td class="text-right font-mono">${fmt(it.unit_price)} kr</td>
+                    <td class="text-right">${it.moms}%</td>
+                    <td class="text-right font-mono">${fmt(it.total)} kr</td>
+                </tr>`).join('')}
+            </tbody>
+            <tfoot>
+                <tr><td colspan="4" class="text-right" style="font-weight:600">Delsumma</td><td class="text-right font-mono">${fmt(inv.subtotal)} kr</td></tr>
+                <tr><td colspan="4" class="text-right text-muted">Moms</td><td class="text-right font-mono text-muted">${fmt(inv.moms_total)} kr</td></tr>
+                <tr><td colspan="4" class="text-right" style="font-weight:700;font-size:1.05rem">Att betala</td><td class="text-right font-mono" style="font-weight:700;font-size:1.05rem">${fmt(inv.total)} kr</td></tr>
+            </tfoot>
+        </table>` : '<p class="text-muted">Inga rader</p>';
+
+    const overdue = isOverdue(inv);
+
+    openModal(`Faktura ${inv.id}`, `
+        <div class="receipt-detail">
+            ${overdue ? '<div class="alert alert-danger mb-4">🚨 Denna faktura är förfallen!</div>' : ''}
+            <div class="receipt-detail-meta">
+                <div class="receipt-detail-row"><span class="receipt-detail-label">Kund</span><span style="font-weight:600">${inv.customer_name || '—'}</span></div>
+                <div class="receipt-detail-row"><span class="receipt-detail-label">Titel</span><span>${inv.title}</span></div>
+                <div class="receipt-detail-row"><span class="receipt-detail-label">Bolag</span><span class="tag tag-primary">${inv.bolag}</span></div>
+                <div class="receipt-detail-row"><span class="receipt-detail-label">Förfallodatum</span><span class="${overdue ? 'text-danger' : ''}" style="font-weight:600">${inv.due_date || '—'}</span></div>
+                ${inv.quote_id ? `<div class="receipt-detail-row"><span class="receipt-detail-label">Offert-ref</span><span class="font-mono text-sm">${inv.quote_id}</span></div>` : ''}
+                <div class="receipt-detail-row"><span class="receipt-detail-label">Skapad av</span><span>${inv.created_by}</span></div>
+                <div class="receipt-detail-row"><span class="receipt-detail-label">Datum</span><span class="text-muted">${(inv.created || '').slice(0,10)}</span></div>
+            </div>
+            ${inv.description ? `<div style="margin:12px 0;padding:12px;background:var(--bg);border-radius:var(--radius-sm);font-size:0.9rem">${inv.description}</div>` : ''}
+            <h3 style="margin:16px 0 8px;font-size:0.9rem;font-weight:700">Rader</h3>
+            ${itemsHtml}
+            <h3 style="margin:16px 0 8px;font-size:0.9rem;font-weight:700">Betalningsstatus</h3>
+            <div class="flex gap-2 flex-wrap">${statusButtons}</div>
+            <div class="flex gap-2 mt-4">
+                <a href="/api/invoices/${inv.id}/pdf" target="_blank" class="btn btn-secondary flex-1">📄 Ladda ner PDF</a>
+            </div>
+        </div>
+    `, inv.customer_name || '');
+}
+
+async function changeInvoiceStatus(iid, status) {
+    await api(`/api/invoices/${iid}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status }),
+    });
+    toast(`Faktura ändrad till ${status}`, 'success');
+    openInvoiceDetail(iid);
+    setTimeout(() => { if (state.page === 'invoices') loadInvoices(); }, 500);
+}
+
+async function deleteInvoice(id) {
+    if (!confirm('Ta bort denna faktura?')) return;
+    await api(`/api/invoices/${id}`, { method: 'DELETE' });
+    toast('Faktura borttagen', 'success');
+    loadInvoices();
+}
+
+// ===== INTEGRATIONS =======================================================
+async function renderIntegrations() {
+    if (state.role !== 'admin') {
+        el('pageContent').innerHTML = `
+            <div class="page-header"><h1>Integrationer</h1></div>
+            <div class="card card-body"><p>Du behöver admin-behörighet för att hantera integrationer.</p></div>`;
+        return;
+    }
+
+    el('pageContent').innerHTML = `
+        <div class="page-header">
+            <div class="page-header-row">
+                <div><h1>🔗 Integrationer</h1><p>Koppla externa tjänster för automatisk synkning av data</p></div>
+                <div class="flex gap-2">
+                    <button class="btn btn-secondary" onclick="syncAllIntegrations()">🔄 Synka alla</button>
+                    <button class="btn btn-primary" onclick="openAddIntegrationModal()">+ Ny integration</button>
+                </div>
+            </div>
+        </div>
+        <div id="integrationsContent"><div class="spinner"></div></div>`;
+    loadIntegrations();
+}
+
+async function loadIntegrations() {
+    const [integrations, platforms] = await Promise.all([
+        api('/api/integrations'),
+        api('/api/integrations/platforms'),
+    ]);
+    if (!integrations) return;
+
+    if (!integrations.length) {
+        el('integrationsContent').innerHTML = `
+            <div class="empty-state">
+                <h3>Inga integrationer konfigurerade</h3>
+                <p>Koppla Shopify, annonsplattformar och mer för att automatisera din bokföring.</p>
+                <button class="btn btn-primary mt-4" onclick="openAddIntegrationModal()">+ Lägg till integration</button>
+            </div>
+            <div class="grid-3 mt-6" id="platformShowcase"></div>`;
+        renderPlatformShowcase(platforms);
+        return;
+    }
+
+    const cards = integrations.map(integ => {
+        const enabled = String(integ.enabled).toLowerCase() === 'true';
+        const platform = (platforms || []).find(p => p.platform === integ.platform) || {};
+        const icon = platform.icon || '🔗';
+        const name = platform.display_name || integ.platform;
+
+        const statusClass = integ.last_sync_status === 'success' ? 'tag-success'
+            : integ.last_sync_status === 'error' ? 'tag-danger' : 'tag-neutral';
+        const statusLabel = integ.last_sync_status === 'success' ? 'OK'
+            : integ.last_sync_status === 'error' ? 'Fel' : 'Aldrig synkad';
+
+        return `
+        <div class="card integration-card ${!enabled ? 'integration-disabled' : ''}">
+            <div class="card-body">
+                <div class="integration-header">
+                    <div class="integration-icon">${icon}</div>
+                    <div class="integration-title">
+                        <h3>${escHtml(name)}</h3>
+                        <span class="tag tag-sm ${enabled ? 'tag-success' : 'tag-neutral'}">${enabled ? 'Aktiv' : 'Pausad'}</span>
+                    </div>
+                </div>
+                <div class="integration-details">
+                    <div><strong>Bolag:</strong> ${escHtml(integ.bolag)}</div>
+                    <div><strong>Senast synkad:</strong> ${integ.last_sync || 'Aldrig'}</div>
+                    <div><strong>Status:</strong> <span class="tag tag-sm ${statusClass}">${statusLabel}</span></div>
+                    ${integ.sync_errors ? `<div class="text-danger text-sm mt-2">${escHtml(integ.sync_errors)}</div>` : ''}
+                </div>
+                <div class="integration-actions mt-4">
+                    <button class="btn btn-primary btn-sm" onclick="syncIntegration('${escHtml(integ.id)}')">🔄 Synka nu</button>
+                    <button class="btn btn-secondary btn-sm" onclick="testIntegration('${escHtml(integ.id)}')">🧪 Testa</button>
+                    <button class="btn btn-ghost btn-sm" onclick="toggleIntegration('${escHtml(integ.id)}')">${enabled ? '⏸ Pausa' : '▶ Aktivera'}</button>
+                    <button class="btn btn-ghost btn-sm" onclick="editIntegration('${escHtml(integ.id)}', '${escHtml(integ.platform)}')">✏️</button>
+                    <button class="btn btn-ghost btn-sm text-danger" onclick="deleteIntegration('${escHtml(integ.id)}')">🗑️</button>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+
+    // Available platforms that aren't configured yet
+    const configuredPlatforms = integrations.map(i => i.platform);
+    const available = (platforms || []).filter(p => !configuredPlatforms.includes(p.platform));
+    const availableHtml = available.length ? `
+        <div class="mt-6">
+            <h3 class="text-muted mb-4">Tillgängliga integrationer</h3>
+            <div class="grid-3">${available.map(p => `
+                <div class="card card-body integration-available" onclick="openAddIntegrationModal('${p.platform}')" style="cursor:pointer">
+                    <div class="integration-header">
+                        <div class="integration-icon">${p.icon}</div>
+                        <div><h4>${escHtml(p.display_name)}</h4><p class="text-sm text-muted">${escHtml(p.description)}</p></div>
+                    </div>
+                </div>`).join('')}
+            </div>
+        </div>` : '';
+
+    el('integrationsContent').innerHTML = `
+        <div class="grid-2">${cards}</div>
+        ${availableHtml}`;
+}
+
+function renderPlatformShowcase(platforms) {
+    const container = el('platformShowcase');
+    if (!container || !platforms) return;
+    container.innerHTML = platforms.map(p => `
+        <div class="card card-body integration-available" onclick="openAddIntegrationModal('${p.platform}')" style="cursor:pointer">
+            <div class="integration-header">
+                <div class="integration-icon">${p.icon}</div>
+                <div>
+                    <h4>${escHtml(p.display_name)}</h4>
+                    <p class="text-sm text-muted">${escHtml(p.description)}</p>
+                </div>
+            </div>
+        </div>`).join('');
+}
+
+async function openAddIntegrationModal(preselect) {
+    const platforms = await api('/api/integrations/platforms');
+    if (!platforms) return;
+    const c = state.constants;
+
+    const platformOpts = platforms.map(p =>
+        `<option value="${p.platform}" ${p.platform === preselect ? 'selected' : ''}>${p.icon} ${p.display_name}</option>`
+    ).join('');
+
+    openModal('Ny integration', `
+        <form onsubmit="return submitIntegration(event)">
+            <div class="form-group">
+                <label>Plattform</label>
+                <select class="form-control" id="intPlatform" onchange="updateIntegrationFields()" required>
+                    <option value="">Välj plattform...</option>
+                    ${platformOpts}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Bolag</label>
+                <select class="form-control" id="intBolag">
+                    ${c.businesses.map(b => `<option>${b}</option>`).join('')}
+                </select>
+            </div>
+            <div id="intFields"></div>
+            <div id="intDescription" class="text-sm text-muted mb-4"></div>
+            <button type="submit" class="btn btn-primary" style="width:100%">Spara integration</button>
+        </form>
+    `);
+    if (preselect) updateIntegrationFields();
+
+    // Store platforms for field rendering
+    window._intPlatforms = platforms;
+}
+
+function updateIntegrationFields() {
+    const platform = el('intPlatform')?.value;
+    const platforms = window._intPlatforms || [];
+    const p = platforms.find(x => x.platform === platform);
+    if (!p) { el('intFields').innerHTML = ''; el('intDescription').innerHTML = ''; return; }
+
+    el('intDescription').innerHTML = `<p>${escHtml(p.description)}</p>`;
+    el('intFields').innerHTML = p.required_fields.map(f => `
+        <div class="form-group">
+            <label>${escHtml(f.label)}</label>
+            <input class="form-control int-field" data-key="${f.key}" type="${f.type === 'password' ? 'password' : 'text'}" required placeholder="${escHtml(f.label)}">
+        </div>`).join('');
+}
+
+async function submitIntegration(e) {
+    e.preventDefault();
+    const body = {
+        platform: el('intPlatform').value,
+        bolag: el('intBolag').value,
+    };
+    document.querySelectorAll('.int-field').forEach(input => {
+        body[input.dataset.key] = input.value;
+    });
+
+    const res = await api('/api/integrations', {
+        method: 'POST',
+        body: JSON.stringify(body),
+    });
+    closeModal();
+    if (res && res.ok) {
+        toast('Integration sparad!', 'success');
+    } else {
+        toast(res?.error || 'Kunde inte spara', 'error');
+    }
+    loadIntegrations();
+}
+
+async function editIntegration(intId, platform) {
+    // Re-open the add modal with the platform preselected
+    await openAddIntegrationModal(platform);
+}
+
+async function syncIntegration(intId) {
+    toast('Synkar...', 'info');
+    const res = await api(`/api/integrations/${intId}/sync`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+    });
+    if (res && res.ok) {
+        const msg = `Synk klar! +${res.added_expenses} utgifter, +${res.added_revenue} intäkter` +
+                    (res.skipped > 0 ? `, ${res.skipped} redan importerade` : '');
+        toast(msg, 'success');
+    } else {
+        toast(`Synkfel: ${res?.error || 'Okänt fel'}`, 'error');
+    }
+    loadIntegrations();
+}
+
+async function testIntegration(intId) {
+    toast('Testar anslutning...', 'info');
+    const res = await api(`/api/integrations/${intId}/test`, { method: 'POST' });
+    if (res && res.ok) {
+        toast(`✅ ${res.message}`, 'success');
+    } else {
+        toast(`❌ ${res?.message || res?.error || 'Kunde inte ansluta'}`, 'error');
+    }
+}
+
+async function toggleIntegration(intId) {
+    await api(`/api/integrations/${intId}/toggle`, { method: 'PUT' });
+    loadIntegrations();
+}
+
+async function deleteIntegration(intId) {
+    if (!confirm('Ta bort denna integration? All konfiguration tas bort.')) return;
+    await api(`/api/integrations/${intId}`, { method: 'DELETE' });
+    toast('Integration borttagen', 'success');
+    loadIntegrations();
+}
+
+async function syncAllIntegrations() {
+    toast('Synkar alla integrationer...', 'info');
+    const res = await api('/api/integrations/sync-all', {
+        method: 'POST',
+        body: JSON.stringify({}),
+    });
+    if (res && res.ok) {
+        const results = res.results || [];
+        const ok = results.filter(r => r.ok).length;
+        const fail = results.filter(r => !r.ok).length;
+        toast(`Klart! ${ok} lyckades${fail > 0 ? `, ${fail} misslyckades` : ''}`, ok > 0 ? 'success' : 'error');
+    } else {
+        toast('Synk misslyckades', 'error');
+    }
+    loadIntegrations();
 }
 
 // ===== SETTINGS ===========================================================
@@ -1575,12 +2344,12 @@ async function loadSettingsUsers() {
                     <thead><tr><th>Användare</th><th>Roll</th><th>Behörigheter</th><th></th></tr></thead>
                     <tbody>${(users || []).map(u => `
                         <tr>
-                            <td style="font-weight:600">${u.username}</td>
-                            <td><span class="tag ${u.role === 'admin' ? 'tag-primary' : 'tag-neutral'}">${u.role}</span></td>
-                            <td class="text-sm text-muted">${(u.permissions || []).join(', ') || '—'}</td>
+                            <td style="font-weight:600">${escHtml(u.username)}</td>
+                            <td><span class="tag ${u.role === 'admin' ? 'tag-primary' : 'tag-neutral'}">${escHtml(u.role)}</span></td>
+                            <td class="text-sm text-muted">${(u.permissions || []).map(p => escHtml(p)).join(', ') || '—'}</td>
                             <td>
-                                <button class="btn btn-ghost btn-xs" onclick="openEditUserModal('${u.username}', '${u.role}', ${JSON.stringify(u.permissions || []).replace(/"/g, '&quot;')})">✏️</button>
-                                ${u.username !== 'Viktor' ? `<button class="btn btn-ghost btn-xs" onclick="deleteUser('${u.username}')">🗑️</button>` : ''}
+                                <button class="btn btn-ghost btn-xs" onclick="openEditUserModal('${escHtml(u.username)}', '${escHtml(u.role)}', ${JSON.stringify(u.permissions || []).replace(/"/g, '&quot;')})">✏️</button>
+                                ${u.username !== 'Viktor' ? `<button class="btn btn-ghost btn-xs" onclick="deleteUser('${escHtml(u.username)}')">🗑️</button>` : ''}
                             </td>
                         </tr>
                     `).join('')}</tbody>
@@ -1593,7 +2362,7 @@ function openAddUserModal() {
     openModal('Ny användare', `
         <form onsubmit="return submitNewUser(event)">
             <div class="form-group"><label>Användarnamn</label><input class="form-control" id="newUserName" required></div>
-            <div class="form-group"><label>Lösenord</label><input class="form-control" id="newUserPw" value="1234"></div>
+            <div class="form-group"><label>Lösenord (minst 6 tecken)</label><input class="form-control" id="newUserPw" type="password" required minlength="6" placeholder="Ange lösenord"></div>
             <div class="form-group"><label>Roll</label><select class="form-control" id="newUserRole"><option>user</option><option>admin</option></select></div>
             <button type="submit" class="btn btn-primary mt-4" style="width:100%">Skapa</button>
         </form>
@@ -1700,8 +2469,8 @@ async function loadSettingsLog() {
                     <div class="activity-item">
                         <div class="activity-dot"></div>
                         <div class="flex-1">
-                            <div><span class="activity-user">${a.user}</span> ${a.action}</div>
-                            <div class="activity-time">${a.timestamp}${a.details ? ' — ' + a.details : ''}</div>
+                            <div><span class="activity-user">${escHtml(a.user)}</span> ${escHtml(a.action)}</div>
+                            <div class="activity-time">${escHtml(a.timestamp)}${a.details ? ' — ' + escHtml(a.details) : ''}</div>
                         </div>
                     </div>
                 `).join('') || '<div class="text-muted text-sm">Ingen aktivitet</div>'}
@@ -1709,5 +2478,478 @@ async function loadSettingsLog() {
         </div>`;
 }
 
+// ===== PROJECTS ===========================================================
+
+async function renderProjects() {
+    const c = state.constants;
+    el('pageContent').innerHTML = `
+        <div class="page-header">
+            <div class="page-header-row">
+                <div><h1>Projekt</h1><p>Hantera arbetsgrupper, uppgifter och filer</p></div>
+                <button class="btn btn-primary" onclick="openCreateProjectModal()">+ Nytt projekt</button>
+            </div>
+        </div>
+        <div class="project-layout">
+            <div class="project-sidebar" id="projectSidebar">
+                <div class="project-sidebar-header"><h3>Projekt</h3></div>
+                <div class="project-list" id="projectList"><div class="spinner"></div></div>
+            </div>
+            <div class="project-main" id="projectMain">
+                <div class="project-empty">Välj ett projekt eller skapa ett nytt</div>
+            </div>
+        </div>`;
+    loadProjectList();
+}
+
+async function loadProjectList() {
+    const projects = await api('/api/projects');
+    if (!projects || !projects.length) {
+        el('projectList').innerHTML = '<div class="card-body text-muted text-sm">Inga projekt ännu</div>';
+        return;
+    }
+    el('projectList').innerHTML = projects.map(p => {
+        const statusIcon = p.status === 'Aktivt' ? '🟢' : p.status === 'Pausat' ? '🟡' : '⚪';
+        const canDelete = state.role === 'admin' || p.created_by === state.user;
+        return `
+        <div class="project-list-item${state.selectedProjectId === p.id ? ' active' : ''}" onclick="selectProject('${escHtml(p.id)}')">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <div class="project-list-name">${statusIcon} ${escHtml(p.name)}</div>
+                ${canDelete ? `<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();deleteProject('${escHtml(p.id)}','${escHtml(p.name).replace(/'/g, "\\'")}')" title="Ta bort">✕</button>` : ''}
+            </div>
+            <div class="project-list-meta">${escHtml(p.bolag)} · ${Array.isArray(p.members) ? p.members.length : 0} medlemmar</div>
+        </div>`;
+    }).join('');
+}
+
+async function selectProject(pid) {
+    state.selectedProjectId = pid;
+    loadProjectList();
+    const projects = await api('/api/projects');
+    const proj = (projects || []).find(p => p.id === pid);
+    if (!proj) return;
+    const members = Array.isArray(proj.members) ? proj.members : [];
+    el('projectMain').innerHTML = `
+        <div class="project-detail">
+            <div class="project-detail-header">
+                <div>
+                    <h2>${escHtml(proj.name)}</h2>
+                    <p class="text-muted">${escHtml(proj.description || 'Ingen beskrivning')}</p>
+                </div>
+                <div class="flex gap-2">
+                    <select class="form-control" style="width:auto" onchange="updateProjectStatus('${pid}',this.value)">
+                        ${(state.constants?.project_statuses || ['Aktivt','Pausat','Avslutat']).map(s => `<option${s === proj.status ? ' selected' : ''}>${s}</option>`).join('')}
+                    </select>
+                    <button class="btn btn-secondary btn-sm" onclick="openEditProjectModal('${pid}')">✏️ Redigera</button>
+                </div>
+            </div>
+            <div class="project-tabs">
+                <button class="project-tab active" onclick="switchProjectTab(this, 'tasks', '${pid}')">📋 Uppgifter</button>
+                <button class="project-tab" onclick="switchProjectTab(this, 'members', '${pid}')">👥 Medlemmar (${members.length})</button>
+                <button class="project-tab" onclick="switchProjectTab(this, 'files', '${pid}')">📁 Filer</button>
+            </div>
+            <div id="projectTabContent"><div class="spinner"></div></div>
+        </div>`;
+    loadProjectTasks(pid);
+}
+
+function switchProjectTab(btn, tab, pid) {
+    document.querySelectorAll('.project-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (tab === 'tasks') loadProjectTasks(pid);
+    else if (tab === 'members') loadProjectMembers(pid);
+    else if (tab === 'files') loadProjectFiles(pid);
+}
+
+// ----- Tasks (Kanban) -----
+async function loadProjectTasks(pid) {
+    const tasks = await api(`/api/projects/${pid}/tasks`);
+    const statuses = ['Att göra', 'Pågår', 'Klar'];
+    const statusColors = { 'Att göra': 'var(--warning)', 'Pågår': 'var(--primary)', 'Klar': 'var(--success)' };
+    const content = el('projectTabContent');
+    content.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <span class="text-muted text-sm">${(tasks || []).length} uppgifter</span>
+            <button class="btn btn-primary btn-sm" onclick="openCreateTaskModal('${pid}')">+ Ny uppgift</button>
+        </div>
+        <div class="kanban-board">
+            ${statuses.map(s => {
+                const col = (tasks || []).filter(t => t.status === s);
+                return `
+                <div class="kanban-column">
+                    <div class="kanban-header">
+                        <div class="kanban-title" style="color:${statusColors[s]}">${s}</div>
+                        <div class="kanban-count">${col.length}</div>
+                    </div>
+                    <div class="kanban-cards">
+                        ${col.length ? col.map(t => `
+                            <div class="kanban-card" onclick="openTaskDetailModal('${pid}','${t.id}')">
+                                <div class="kanban-card-name">${escHtml(t.title)}</div>
+                                ${t.assigned_to ? `<div class="kanban-card-sub">→ ${escHtml(t.assigned_to)}</div>` : ''}
+                                <div class="kanban-card-footer">
+                                    ${priorityTag(t.priority)}
+                                    ${t.deadline ? `<span class="text-muted text-sm">📅 ${t.deadline}</span>` : ''}
+                                </div>
+                            </div>
+                        `).join('') : '<div class="kanban-empty">Inga uppgifter</div>'}
+                    </div>
+                </div>`;
+            }).join('')}
+        </div>`;
+}
+
+async function openCreateTaskModal(pid) {
+    const projects = await api('/api/projects');
+    const proj = (projects || []).find(p => p.id === pid);
+    const members = Array.isArray(proj?.members) ? proj.members : [];
+    const c = state.constants;
+    openModal('Ny uppgift', `
+        <form onsubmit="return submitProjectTask(event, '${pid}')">
+            <div class="form-group"><label>Titel</label><input class="form-control" id="ptaskTitle" required placeholder="Uppgiftens titel"></div>
+            <div class="form-group"><label>Beskrivning</label><textarea class="form-control" id="ptaskDesc" rows="2" placeholder="Valfri beskrivning"></textarea></div>
+            <div class="form-row">
+                <div class="form-group"><label>Tilldelad till</label>
+                    <select class="form-control" id="ptaskAssign">
+                        <option value="">— Ingen —</option>
+                        ${members.map(m => `<option value="${escHtml(m)}">${escHtml(m)}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group"><label>Prioritet</label>
+                    <select class="form-control" id="ptaskPriority">
+                        ${(c?.task_priorities || ['Hög','Medel','Låg']).map(p => `<option${p==='Medel'?' selected':''}>${p}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+            <div class="form-group"><label>Deadline</label><input type="date" class="form-control" id="ptaskDeadline"></div>
+            <button type="submit" class="btn btn-primary mt-4" style="width:100%">Skapa uppgift</button>
+        </form>
+    `);
+}
+
+async function submitProjectTask(e, pid) {
+    e.preventDefault();
+    await api(`/api/projects/${pid}/tasks`, {
+        method: 'POST',
+        body: JSON.stringify({
+            title: el('ptaskTitle').value,
+            description: el('ptaskDesc').value,
+            assigned_to: el('ptaskAssign').value,
+            priority: el('ptaskPriority').value,
+            deadline: el('ptaskDeadline').value,
+        }),
+    });
+    closeModal();
+    toast('Uppgift skapad', 'success');
+    loadProjectTasks(pid);
+}
+
+async function openTaskDetailModal(pid, tid) {
+    const tasks = await api(`/api/projects/${pid}/tasks`);
+    const task = (tasks || []).find(t => t.id === tid);
+    if (!task) return;
+    const projects = await api('/api/projects');
+    const proj = (projects || []).find(p => p.id === pid);
+    const members = Array.isArray(proj?.members) ? proj.members : [];
+    const c = state.constants;
+    openModal('Uppgift: ' + escHtml(task.title), `
+        <form onsubmit="return updateProjectTask(event, '${pid}', '${tid}')">
+            <div class="form-group"><label>Titel</label><input class="form-control" id="ptaskEditTitle" value="${escHtml(task.title)}"></div>
+            <div class="form-group"><label>Beskrivning</label><textarea class="form-control" id="ptaskEditDesc" rows="2">${escHtml(task.description || '')}</textarea></div>
+            <div class="form-row">
+                <div class="form-group"><label>Status</label>
+                    <select class="form-control" id="ptaskEditStatus">
+                        ${(c?.task_statuses || ['Att göra','Pågår','Klar']).map(s => `<option${s===task.status?' selected':''}>${s}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group"><label>Prioritet</label>
+                    <select class="form-control" id="ptaskEditPriority">
+                        ${(c?.task_priorities || ['Hög','Medel','Låg']).map(p => `<option${p===task.priority?' selected':''}>${p}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>Tilldelad till</label>
+                    <select class="form-control" id="ptaskEditAssign">
+                        <option value="">— Ingen —</option>
+                        ${members.map(m => `<option value="${escHtml(m)}"${m===task.assigned_to?' selected':''}>${escHtml(m)}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group"><label>Deadline</label><input type="date" class="form-control" id="ptaskEditDeadline" value="${task.deadline || ''}"></div>
+            </div>
+            <div class="text-muted text-sm mt-2">Skapad av ${escHtml(task.created_by)} · ${escHtml(task.created_at || '')}</div>
+            <div class="flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary" style="flex:1">Spara</button>
+                <button type="button" class="btn btn-danger" onclick="deleteProjectTask('${pid}','${tid}')">Ta bort</button>
+            </div>
+        </form>
+    `);
+}
+
+async function updateProjectTask(e, pid, tid) {
+    e.preventDefault();
+    await api(`/api/projects/${pid}/tasks/${tid}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+            title: el('ptaskEditTitle').value,
+            description: el('ptaskEditDesc').value,
+            status: el('ptaskEditStatus').value,
+            priority: el('ptaskEditPriority').value,
+            assigned_to: el('ptaskEditAssign').value,
+            deadline: el('ptaskEditDeadline').value,
+        }),
+    });
+    closeModal();
+    toast('Uppgift uppdaterad', 'success');
+    loadProjectTasks(pid);
+}
+
+async function deleteProjectTask(pid, tid) {
+    if (!confirm('Ta bort denna uppgift?')) return;
+    await api(`/api/projects/${pid}/tasks/${tid}`, { method: 'DELETE' });
+    closeModal();
+    toast('Uppgift borttagen', 'success');
+    loadProjectTasks(pid);
+}
+
+async function updateProjectStatus(pid, status) {
+    await api(`/api/projects/${pid}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status }),
+    });
+    toast('Status uppdaterad', 'success');
+    loadProjectList();
+}
+
+// ----- Members tab -----
+async function loadProjectMembers(pid) {
+    const projects = await api('/api/projects');
+    const proj = (projects || []).find(p => p.id === pid);
+    if (!proj) return;
+    const members = Array.isArray(proj.members) ? proj.members : [];
+    const allUsers = await api('/api/users-list');
+    const content = el('projectTabContent');
+    content.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <span class="text-muted text-sm">${members.length} medlemmar</span>
+            <button class="btn btn-primary btn-sm" onclick="openAddMembersModal('${pid}')">+ Lägg till</button>
+        </div>
+        <div class="card">
+        ${members.map(m => `
+            <div class="activity-item" style="padding:12px 16px">
+                <div class="user-avatar" style="width:32px;height:32px;font-size:0.8rem">${m[0]?.toUpperCase() || '?'}</div>
+                <div class="flex-1">
+                    <div style="font-weight:600">${escHtml(m)}</div>
+                    <div class="text-muted text-sm">${m === proj.created_by ? 'Skapare' : 'Medlem'}</div>
+                </div>
+                ${m !== proj.created_by ? `<button class="btn btn-ghost btn-xs" onclick="removeProjectMember('${pid}','${escHtml(m)}')">✕</button>` : ''}
+            </div>
+        `).join('')}
+        </div>`;
+}
+
+async function openAddMembersModal(pid) {
+    const projects = await api('/api/projects');
+    const proj = (projects || []).find(p => p.id === pid);
+    const members = Array.isArray(proj?.members) ? proj.members : [];
+    const allUsers = await api('/api/users-list');
+    const nonMembers = (allUsers || []).filter(u => !members.includes(u));
+    if (!nonMembers.length) {
+        toast('Alla användare är redan medlemmar', 'info');
+        return;
+    }
+    openModal('Lägg till medlemmar', `
+        <form onsubmit="return submitAddMembers(event, '${pid}')">
+            ${nonMembers.map(u => `
+                <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer">
+                    <input type="checkbox" value="${escHtml(u)}" class="addMemberCb"> ${escHtml(u)}
+                </label>
+            `).join('')}
+            <button type="submit" class="btn btn-primary mt-4" style="width:100%">Lägg till valda</button>
+        </form>
+    `);
+}
+
+async function submitAddMembers(e, pid) {
+    e.preventDefault();
+    const projects = await api('/api/projects');
+    const proj = (projects || []).find(p => p.id === pid);
+    const members = Array.isArray(proj?.members) ? [...proj.members] : [];
+    document.querySelectorAll('.addMemberCb:checked').forEach(cb => {
+        if (!members.includes(cb.value)) members.push(cb.value);
+    });
+    await api(`/api/projects/${pid}`, {
+        method: 'PUT',
+        body: JSON.stringify({ members }),
+    });
+    closeModal();
+    toast('Medlemmar tillagda', 'success');
+    selectProject(pid);
+}
+
+async function removeProjectMember(pid, username) {
+    if (!confirm(`Ta bort ${username} från projektet?`)) return;
+    const projects = await api('/api/projects');
+    const proj = (projects || []).find(p => p.id === pid);
+    const members = Array.isArray(proj?.members) ? proj.members.filter(m => m !== username) : [];
+    await api(`/api/projects/${pid}`, {
+        method: 'PUT',
+        body: JSON.stringify({ members }),
+    });
+    toast('Medlem borttagen', 'success');
+    selectProject(pid);
+}
+
+// ----- Files tab -----
+async function loadProjectFiles(pid) {
+    const files = await api(`/api/projects/${pid}/files`);
+    const content = el('projectTabContent');
+    content.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <span class="text-muted text-sm">${(files || []).length} filer</span>
+            <button class="btn btn-primary btn-sm" onclick="openUploadProjectFileModal('${pid}')">📎 Ladda upp fil</button>
+        </div>
+        ${(files || []).length ? `<div class="card">
+            ${files.map(f => `
+                <div class="activity-item" style="padding:12px 16px">
+                    <div style="font-size:1.2rem">📄</div>
+                    <div class="flex-1">
+                        <a href="/api/projects/files/${escHtml(f.filename)}" target="_blank" style="font-weight:600;color:var(--primary)">${escHtml(f.original_name || f.filename)}</a>
+                        <div class="text-muted text-sm">Uppladdad av ${escHtml(f.uploaded_by)} · ${escHtml(f.uploaded_at || '')}</div>
+                    </div>
+                    <button class="btn btn-ghost btn-xs" onclick="deleteProjectFile('${pid}','${f.id}')">✕</button>
+                </div>
+            `).join('')}
+        </div>` : '<div class="text-muted text-sm">Inga filer uppladdade ännu</div>'}`;
+}
+
+function openUploadProjectFileModal(pid) {
+    openModal('Ladda upp fil', `
+        <form onsubmit="return submitProjectFile(event, '${pid}')">
+            <div class="form-group">
+                <label>Välj fil(er)</label>
+                <input type="file" class="form-control" id="projFileInput" multiple required>
+            </div>
+            <button type="submit" class="btn btn-primary mt-4" style="width:100%">Ladda upp</button>
+        </form>
+    `);
+}
+
+async function submitProjectFile(e, pid) {
+    e.preventDefault();
+    const fileInput = el('projFileInput');
+    if (!fileInput.files.length) return;
+    const formData = new FormData();
+    for (const f of fileInput.files) formData.append('files', f);
+    const res = await fetch(`/api/projects/${pid}/files`, { method: 'POST', body: formData });
+    const data = await res.json();
+    closeModal();
+    if (data.ok) {
+        toast(`${data.files.length} fil(er) uppladdade`, 'success');
+        loadProjectFiles(pid);
+    } else {
+        toast(data.error || 'Uppladdning misslyckades', 'error');
+    }
+}
+
+async function deleteProjectFile(pid, fid) {
+    if (!confirm('Ta bort denna fil?')) return;
+    await api(`/api/projects/${pid}/files/${fid}`, { method: 'DELETE' });
+    toast('Fil borttagen', 'success');
+    loadProjectFiles(pid);
+}
+
+// ----- Create / Edit project modals -----
+async function openCreateProjectModal() {
+    const c = state.constants;
+    const users = await api('/api/users-list');
+    openModal('Nytt projekt', `
+        <form onsubmit="return submitProject(event)">
+            <div class="form-group"><label>Projektnamn</label><input class="form-control" id="projName" required placeholder="Namnge projektet"></div>
+            <div class="form-group"><label>Beskrivning</label><textarea class="form-control" id="projDesc" rows="2" placeholder="Valfri beskrivning"></textarea></div>
+            <div class="form-group"><label>Verksamhet</label>
+                <select class="form-control" id="projBolag">${(c?.businesses || []).map(b => `<option>${b}</option>`).join('')}</select>
+            </div>
+            <div class="form-group">
+                <label>Medlemmar</label>
+                ${(users || []).map(u => `
+                    <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer">
+                        <input type="checkbox" value="${escHtml(u)}" ${u === state.user ? 'checked disabled' : ''} class="projMember"> ${escHtml(u)}
+                    </label>
+                `).join('')}
+            </div>
+            <button type="submit" class="btn btn-primary mt-4" style="width:100%">Skapa projekt</button>
+        </form>
+    `);
+}
+
+async function submitProject(e) {
+    e.preventDefault();
+    const members = [state.user];
+    document.querySelectorAll('.projMember:checked').forEach(cb => {
+        if (!members.includes(cb.value)) members.push(cb.value);
+    });
+    await api('/api/projects', {
+        method: 'POST',
+        body: JSON.stringify({
+            name: el('projName').value,
+            description: el('projDesc').value,
+            bolag: el('projBolag').value,
+            members,
+        }),
+    });
+    closeModal();
+    toast('Projekt skapat', 'success');
+    loadProjectList();
+}
+
+async function openEditProjectModal(pid) {
+    const projects = await api('/api/projects');
+    const proj = (projects || []).find(p => p.id === pid);
+    if (!proj) return;
+    openModal('Redigera projekt', `
+        <form onsubmit="return submitEditProject(event, '${pid}')">
+            <div class="form-group"><label>Projektnamn</label><input class="form-control" id="projEditName" value="${escHtml(proj.name)}"></div>
+            <div class="form-group"><label>Beskrivning</label><textarea class="form-control" id="projEditDesc" rows="2">${escHtml(proj.description || '')}</textarea></div>
+            <button type="submit" class="btn btn-primary mt-4" style="width:100%">Spara</button>
+        </form>
+    `);
+}
+
+async function submitEditProject(e, pid) {
+    e.preventDefault();
+    await api(`/api/projects/${pid}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+            name: el('projEditName').value,
+            description: el('projEditDesc').value,
+        }),
+    });
+    closeModal();
+    toast('Projekt uppdaterat', 'success');
+    selectProject(pid);
+    loadProjectList();
+}
+
+async function deleteProject(pid, name) {
+    if (!confirm(`Ta bort projektet "${name}" med alla uppgifter och filer?`)) return;
+    await api(`/api/projects/${pid}`, { method: 'DELETE' });
+    if (state.selectedProjectId === pid) {
+        state.selectedProjectId = null;
+        el('projectMain').innerHTML = '<div class="project-empty">Välj ett projekt eller skapa ett nytt</div>';
+    }
+    toast('Projekt borttaget', 'success');
+    loadProjectList();
+}
+
 // ===== INIT ===============================================================
+
+// Stop chat polling when tab is hidden, restart when visible
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        if (state.chatPollTimer) { clearInterval(state.chatPollTimer); state.chatPollTimer = null; }
+    } else if (state.page === 'chat' && state.chatGroupId) {
+        loadChatMessages();
+        state.chatPollTimer = setInterval(loadChatMessages, 30000);
+    }
+});
+
 init();

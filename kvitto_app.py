@@ -419,7 +419,7 @@ def add_calendar_event(calendar_data: Dict, titel: str, datum: date, tid: str,
                        återkommande: str, påminnelse: int, file_info: tuple = None) -> None:
     """Lägger till kalenderhändelse"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename, file_type = file_info if file_info else (None, None)
+    filename, file_type, url = file_info if file_info else (None, None, None)
 
     händelse = {
         "id": timestamp,
@@ -434,6 +434,7 @@ def add_calendar_event(calendar_data: Dict, titel: str, datum: date, tid: str,
         "påminnelse": påminnelse,
         "bild": filename,
         "filtyp": file_type,
+        "url": url,
         "skapad": datetime.now().strftime("%Y-%m-%d %H:%M")
     }
     calendar_data["händelser"].append(händelse)
@@ -485,9 +486,9 @@ def get_overdue_events(calendar_data: Dict) -> List[Dict]:
 
 
 def save_file(uploaded_file, identifier: str, timestamp: str, folder: Path) -> tuple:
-    """Sparar uppladdad fil (bild eller PDF) och returnerar filnamn + filtyp"""
+    """Sparar uppladdad fil (bild eller PDF) och returnerar filnamn + filtyp + länk"""
     if uploaded_file is None:
-        return None, None
+        return None, None, None
 
     file_extension = uploaded_file.name.split('.')[-1].lower()
     filename = f"{identifier}_{timestamp}.{file_extension}"
@@ -496,7 +497,19 @@ def save_file(uploaded_file, identifier: str, timestamp: str, folder: Path) -> t
     with open(filepath, 'wb') as f:
         f.write(uploaded_file.getbuffer())
 
-    return filename, file_extension
+    # Ladda upp till Google Drive via db_handler
+    drive_link = None
+    try:
+        from db_handler import db
+        # Vi öppnar den sparade lokala filen för att ladda upp den, 
+        # vilket är säkrare än att återanvända uploaded_file-buffern
+        with open(filepath, 'rb') as f:
+             drive_link = db.upload_file(f, filename)
+    except Exception as e:
+        # Om det misslyckas, logga bara felet men låt den lokala sparningen bestå
+        print(f"Cloud upload failed: {e}")
+
+    return filename, file_extension, drive_link
 
 
 def load_image(filename: str, folder: Path = IMAGES_DIR):
@@ -569,7 +582,7 @@ def add_user(data: Dict, username: str) -> bool:
 def add_receipt(data: Dict, username: str, beskrivning: str, belopp: float, file_info: tuple = None) -> None:
     """Lägger till kvitto under användare"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename, file_type = file_info if file_info else (None, None)
+    filename, file_type, url = file_info if file_info else (None, None, None)
 
     kvitto = {
         "datum": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -577,6 +590,7 @@ def add_receipt(data: Dict, username: str, beskrivning: str, belopp: float, file
         "belopp": belopp,
         "bild": filename,
         "filtyp": file_type,
+        "url": url,
         "timestamp": timestamp,
         "inlagd_av": username
     }
@@ -591,7 +605,7 @@ def add_company_expense(company_expenses: Dict, verksamhet: str, kategori: str,
                         file_info: tuple = None) -> None:
     """Lägger till företagsutgift"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename, file_type = file_info if file_info else (None, None)
+    filename, file_type, url = file_info if file_info else (None, None, None)
 
     utgift = {
         "datum": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -601,6 +615,7 @@ def add_company_expense(company_expenses: Dict, verksamhet: str, kategori: str,
         "belopp": belopp,
         "bild": filename,
         "filtyp": file_type,
+        "url": url,
         "timestamp": timestamp
     }
 
@@ -964,7 +979,7 @@ def add_revenue(revenue_data: Dict, beskrivning: str, belopp: float, kund: str,
                 file_info: tuple = None, registrerad_av: str = "Admin", verksamhet: str = None) -> None:
     """Lägger till intäkt"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename, file_type = file_info if file_info else (None, None)
+    filename, file_type, url = file_info if file_info else (None, None, None)
 
     intakt = {
         "datum": datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -979,6 +994,7 @@ def add_revenue(revenue_data: Dict, beskrivning: str, belopp: float, kund: str,
         "exkl_moms": belopp - (belopp * (momssats / 100)),
         "bild": filename,
         "filtyp": file_type,
+        "url": url,
         "timestamp": timestamp,
         "registrerad_av": registrerad_av,
         "verksamhet": verksamhet  # LÄGG TILL DETTA!

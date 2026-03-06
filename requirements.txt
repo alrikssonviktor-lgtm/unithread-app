@@ -5,3 +5,8 @@ google-auth
 google-api-python-client
 openpyxl
 reportlab
+bcrypt
+flask-wtf
+flask-limiter
+flask-socketio
+requests

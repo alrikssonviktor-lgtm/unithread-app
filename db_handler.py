@@ -10,6 +10,9 @@ from pathlib import Path
 from datetime import datetime
 import io
 import time
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+import pickle
 
 # --- KONFIGURATION ---
 SCOPES = [
@@ -17,6 +20,8 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 SERVICE_ACCOUNT_FILE = "service_account.json"
+CLIENT_SECRET_FILE = "client_secret.json"
+TOKEN_FILE = "token.pickle"
 SPREADSHEET_NAME = "Ekonomi_DB"
 DRIVE_FOLDER_NAME = "Unithread_App_Data"  # Mappen vi skapade
 
@@ -31,31 +36,57 @@ class DBHandler:
         self._authenticate()
 
     def _authenticate(self):
-        """Autentiserar mot Google API."""
+        """Autentiserar mot Google API (Försöker med OAuth User först, sen Service Account)."""
         try:
-            # 1. Försök ladda från Streamlit Secrets (Molnet)
-            # Vi använder try-except eftersom st.secrets kraschar om filen saknas lokalt
-            try:
-                if "gcp_service_account" in st.secrets:
-                    self.creds = Credentials.from_service_account_info(
-                        st.secrets["gcp_service_account"], scopes=SCOPES
-                    )
-            except Exception:
-                pass  # Inga secrets hittades, fortsätt till lokal fil
+            # 1. Metod A: OAuth 2.0 (Användaren loggar in) - FÖREDRAS
+            if os.path.exists(TOKEN_FILE):
+                with open(TOKEN_FILE, 'rb') as token:
+                    self.creds = pickle.load(token)
 
-            # 2. Annars ladda från lokal fil (Lokal utveckling)
+            # Om inga giltiga tokens finns, låt användaren logga in
+            if not self.creds or not self.creds.valid:
+                if self.creds and self.creds.expired and self.creds.refresh_token:
+                    try:
+                        self.creds.refresh(Request())
+                    except Exception:
+                        self.creds = None
+                
+                if not self.creds and os.path.exists(CLIENT_SECRET_FILE):
+                    # Bara om secret file finns, kör vi OAuth-flowet
+                    try:
+                        flow = InstalledAppFlow.from_client_secrets_file(
+                            CLIENT_SECRET_FILE, SCOPES)
+                        self.creds = flow.run_local_server(port=0)
+                        # Spara token för nästa gång
+                        with open(TOKEN_FILE, 'wb') as token:
+                            pickle.dump(self.creds, token)
+                    except Exception as e:
+                        st.warning(f"OAuth-inloggning misslyckades ({e}), faller tillbaka på Service Account...")
+                        self.creds = None
+
+            # 2. Metod B: Service Account (Fallback om OAuth inte funkar)
             if not self.creds:
-                if os.path.exists(SERVICE_ACCOUNT_FILE):
+                # 2.1 Försök ladda från Streamlit Secrets (Molnet)
+                try:
+                    if "gcp_service_account" in st.secrets:
+                        self.creds = Credentials.from_service_account_info(
+                            st.secrets["gcp_service_account"], scopes=SCOPES
+                        )
+                except Exception:
+                    pass
+
+                # 2.2 Annars ladda från lokal fil
+                if not self.creds and os.path.exists(SERVICE_ACCOUNT_FILE):
                     self.creds = Credentials.from_service_account_file(
                         SERVICE_ACCOUNT_FILE, scopes=SCOPES
                     )
-                else:
-                    st.error(
-                        "❌ **Ingen autentisering hittad!**\n\n"
-                        "För att köra appen lokalt måste du ha filen `service_account.json` i mappen.\n"
-                        "Ladda ner den från Google Cloud Console eller kopiera den från din backup."
-                    )
-                    st.stop()
+
+            if not self.creds:
+                st.error(
+                    "❌ **Ingen autentisering hittad!**\n\n"
+                    "LADDA UPP `client_secret.json` (för användarinloggning) ELLER `service_account.json`."
+                )
+                st.stop()
 
             self.client = gspread.authorize(self.creds)
             self.drive_service = build('drive', 'v3', credentials=self.creds)
@@ -65,7 +96,7 @@ class DBHandler:
                 self.sheet = self.client.open(SPREADSHEET_NAME)
             except gspread.SpreadsheetNotFound:
                 st.error(
-                    f"Kunde inte hitta kalkylarket '{SPREADSHEET_NAME}'. Har du delat det med roboten?")
+                    f"Kunde inte hitta kalkylarket '{SPREADSHEET_NAME}'.")
                 st.stop()
 
             # Hitta Drive-mappen
@@ -200,16 +231,14 @@ class DBHandler:
         except Exception as e:
             error_msg = str(e)
             if "Service Accounts do not have storage quota" in error_msg:
-                st.error(
-                    f"⚠️ **Kritiskt fel (Lagringskvot):**\n"
-                    f"Google Service Accounts har 0 GB lagring som standard och kan därför **INTE** äga filer.\n"
-                    f"När du laddar upp en fil till en vanlig delad mapp ('My Drive') blir roboten ägare och uppladdningen nekas.\n\n"
-                    f"**TVÅ LÖSNINGAR:**\n"
-                    f"1. **Använd en Gemensam enhet (Shared Drive):** Flytta mappen `{DRIVE_FOLDER_NAME}` till en Shared Drive (Team Drive). Där ägs filer av organisationen, inte roboten.\n"
-                    f"2. **Aktivera Billing:** Gå till Google Cloud Console för projektet och koppla ett betalkort (Billing Account). Detta ger ofta roboten 15 GB egen lagring.\n"
+                st.warning(
+                    f"⚠️ **Molnuppladdning hoppades över (Kvot):**\n"
+                    f"Kunde inte ladda upp bilden till Google Drive eftersom robotkontot saknar lagringsutrymme. \n"
+                    f"✅ Bilden har sparats **lokalt** på din dator istället och allt fungerar som det ska.\n\n"
+                    f"*(För att aktivera molnbilder i framtiden: Aktivera Billing för projektet i Google Cloud Console)*"
                 )
             else:
-                st.error(f"Kunde inte ladda upp bild: {e}")
+                st.warning(f"Kunde inte ladda upp bild till molnet (sparad lokalt): {e}")
             return None
 
 

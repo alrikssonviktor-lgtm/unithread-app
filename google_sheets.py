@@ -195,11 +195,14 @@ class GoogleSheetsDB:
 # --- Initialize default admin user if needed ---
 def initialize_database(db):
     """Create default admin user if users sheet is empty."""
+    import bcrypt
     users = db.load_data("users")
     if not users:
+        default_pw = os.environ.get("DEFAULT_ADMIN_PASSWORD", "ChangeMe!2026")
+        hashed = bcrypt.hashpw(default_pw.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         default_admin = {
             "username": "Viktor",
-            "password_hash": hashlib.sha256("Admin".encode()).hexdigest(),
+            "password_hash": hashed,
             "role": "admin",
             "permissions": json.dumps([
                 "access_settings", "access_reports",
@@ -207,7 +210,7 @@ def initialize_database(db):
             ], ensure_ascii=False),
         }
         db.save_data("users", [default_admin])
-        print("✅ Default admin user 'Viktor' created (password: Admin)")
+        print("✅ Default admin user 'Viktor' created")
 
 
 # Singleton

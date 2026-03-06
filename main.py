@@ -954,6 +954,8 @@ def load_budget() -> Dict:
     }
     try:
         rows = db.load_data("budget")
+        if rows is None:
+            rows = []
         for row in rows:
             bolag = row.get("bolag")
             if bolag in default_budget:
@@ -1811,13 +1813,13 @@ for activity in reversed(recent_activities):
         </div>
     """, unsafe_allow_html=True)
 
-    st.sidebar.markdown("---")
-    st.sidebar.caption("v1.2.3 - Debug Mode")
-    if st.sidebar.button("🚪 Logga ut", type="secondary", use_container_width=True):
-        auth.logout()
+st.sidebar.markdown("---")
+st.sidebar.caption("v1.2.3 - Debug Mode")
+if st.sidebar.button("🚪 Logga ut", type="secondary", use_container_width=True):
+    auth.logout()
 
-    if not recent_activities:
-        st.sidebar.info("Ingen aktivitet än")
+if not recent_activities:
+    st.sidebar.info("Ingen aktivitet än")
 
 # --- DASHBOARD (FÖRBÄTTRAD) ---
 if main_menu == "📊 Dashboard":
